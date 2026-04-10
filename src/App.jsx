@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import "./App.css";
 import "leaflet/dist/leaflet.css";
+import { Icon } from "@iconify/react";
 
 function MapUpdater({ lat, lon, zoom }) {
   const map = useMap();
@@ -9,17 +11,25 @@ function MapUpdater({ lat, lon, zoom }) {
 }
 
 function formatTime(unix) {
-  return new Date(unix * 1000).toLocaleTimeString([], { 
-    hour: "2-digit", 
+  return new Date(unix * 1000).toLocaleTimeString([], {
+    hour: "2-digit",
     minute: "2-digit",
-    hour12: false 
+    hour12: false
   });
+}
+
+function formatTimeInZone(unix, timezoneOffsetSeconds) {
+  const utcMs = unix * 1000 + timezoneOffsetSeconds * 1000;
+  const d = new Date(utcMs);
+  const h = String(d.getUTCHours()).padStart(2, "0");
+  const m = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
 }
 
 function WeatherMap({ weather }) {
   const lat = weather?.coord.lat ?? 20;
   const lon = weather?.coord.lon ?? 0;
-  const zoom = weather ? 13 : 2;
+  const zoom = weather ? 12 : 2;
   return (
     <div style={{
       position: "fixed",
@@ -45,6 +55,40 @@ function WeatherMap({ weather }) {
       </MapContainer>
     </div>
   );
+}
+
+function getWeatherIcon(iconCode) {
+  const icons = {
+    // Clear
+    "01d": "meteocons:clear-day-fill",
+    "01n": "meteocons:clear-night-fill",
+    // Few clouds
+    "02d": "meteocons:partly-cloudy-day-fill",
+    "02n": "meteocons:partly-cloudy-night-fill",
+    // Scattered clouds
+    "03d": "meteocons:cloudy-fill",
+    "03n": "meteocons:cloudy-fill",
+    // Broken clouds
+    "04d": "meteocons:overcast-day-fill",
+    "04n": "meteocons:overcast-night-fill",
+    // Shower rain
+    "09d": "meteocons:overcast-drizzle-fill",
+    "09n": "meteocons:overcast-drizzle-fill",
+    // Rain
+    "10d": "meteocons:overcast-rain-fill",
+    "10n": "meteocons:overcast-rain-fill",
+    // Thunderstorm
+    "11d": "meteocons:thunderstorms-day-fill",
+    "11n": "meteocons:thunderstorms-night-fill",
+    // Snow
+    "13d": "meteocons:partly-cloudy-day-snow-fill",
+    "13n": "meteocons:partly-cloudy-night-snow-fill",
+    // Mist/fog
+    "50d": "meteocons:mist-fill",
+    "50n": "meteocons:mist-fill",
+  };
+
+  return icons[iconCode] || "meteocons:not-available-fill";
 }
 
 function App() {
@@ -110,18 +154,22 @@ function App() {
 
   return (
     <div>
-      <h1>Weather App</h1>
+      <h1 style={{ marginBottom: "3rem" }}>Weather App</h1>
 
-      <input
-        type="text"
-        placeholder="Enter city..."
-        value={city}
-        onChange={(e) => setCity(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && getWeather()}
-      />
-      <button onClick={getWeather}>Search</button>
+      <div className="search-bar">
+        <input
+          type="text"
+          placeholder="Enter city..."
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && getWeather()}
+        />
+        <button onClick={getWeather} disabled={loading}>
+          {loading ? <span className="spinner" /> : "Search"}
+        </button>
+      </div>
 
-      {loading && <p>Loading...</p>}
+
       {error && <p style={{ color: "red" }}>{error}</p>}
       {weather && (
         <div style={{ marginTop: "2rem" }}>
@@ -134,17 +182,17 @@ function App() {
           >
             {weather.name}
           </h2>
-          <p>🌅 {formatTime(weather.sys.sunrise)} &nbsp;|&nbsp; 🌇 {formatTime(weather.sys.sunset)}</p>
+          <p>🕐 {formatTimeInZone(Math.floor(Date.now() / 1000), weather.timezone)}</p>
+          <p>🌅 {formatTimeInZone(weather.sys.sunrise, weather.timezone)} &nbsp;|&nbsp; 🌇 {formatTimeInZone(weather.sys.sunset, weather.timezone)}</p>
           <p style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
             Last updated:{" "}
             <strong>{formatTime(weather.dt)}</strong>
           </p>
-          <img
-            src={`https://openweathermap.org/img/wn/${weather.weather[0].icon}@2x.png`}
-            alt="weather icon"
-          />
+          <div style={{ padding: "1.5rem 0", overflow: "visible" }}>
+            <Icon icon={getWeatherIcon(weather.weather[0].icon)} className="weather-icon" style={{ fontSize: "5rem" }} />
+          </div>
           <h2 style={{ marginBottom: "1.5rem" }}>
-            {weather.weather[0].description}
+            {weather.weather[0].main}
           </h2>
           <p>
             Temperature: <strong>{weather.main.temp.toFixed(1)}°C</strong>
@@ -188,10 +236,9 @@ function App() {
                       })}
                     </strong>
                   </p>
-                  <img
-                    src={`https://openweathermap.org/img/wn/${weather[0].icon}@2x.png`}
-                    alt={weather[0].description}
-                  />
+                  <div style={{ padding: "0.75rem 0", overflow: "visible" }}>
+                    <Icon icon={getWeatherIcon(weather[0].icon.replace(/n$/, "d"))} className="weather-icon" style={{ fontSize: "3rem" }} />
+                  </div>
                   <p>{weather[0].description}</p>
                   <p>
                     <strong>
