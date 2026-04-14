@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:icon-sets.iconify.design)",
+      "WebSearch",
+      "WebFetch(domain:meteocons.com)",
+      "WebFetch(domain:iconbuddy.com)",
+      "WebFetch(domain:demo.alessioatzeni.com)",
+      "WebFetch(domain:api.iconify.design)",
+      "WebFetch(domain:iconify.design)",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}

@@ -12,14 +12,46 @@
   animation-iteration-count: infinite !important;
 }
 
+.search-container {
+  position: relative;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
 .search-bar {
   display: flex;
   gap: 0;
   border-radius: 2rem;
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-  max-width: 420px;
-  margin: 0 auto;
+}
+
+.suggestions {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem 0;
+  background: rgba(30, 30, 50, 0.92);
+  backdrop-filter: blur(10px);
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.suggestions li {
+  padding: 0.6rem 1.25rem;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.95rem;
+  transition: background 0.15s;
+}
+
+.suggestions li:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .search-bar input {
@@ -55,6 +87,13 @@
 
 .search-bar button:hover {
   background: rgba(255, 255, 255, 0.38);
+}
+
+.geo-btn {
+  width: auto !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 1.2rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .search-bar button:disabled {

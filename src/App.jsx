@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import "./App.css";
 import "leaflet/dist/leaflet.css";
@@ -14,7 +14,7 @@ function formatTime(unix) {
   return new Date(unix * 1000).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false
+    hour12: false,
   });
 }
 
@@ -31,13 +31,15 @@ function WeatherMap({ weather }) {
   const lon = weather?.coord.lon ?? 0;
   const zoom = weather ? 12 : 2;
   return (
-    <div style={{
-      position: "fixed",
-      inset: 0,
-      zIndex: -1,
-      opacity: 0.3,
-      pointerEvents: "none",
-    }}>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: -1,
+        opacity: 0.3,
+        pointerEvents: "none",
+      }}
+    >
       <MapContainer
         center={[lat, lon]}
         zoom={zoom}
@@ -50,8 +52,8 @@ function WeatherMap({ weather }) {
         keyboard={false}
         attributionControl={false}
       >
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        <MapUpdater lat={lat} lon={lon} zoom={zoom} />
+        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}" />
+<MapUpdater lat={lat} lon={lon} zoom={zoom} />
       </MapContainer>
     </div>
   );
@@ -97,18 +99,71 @@ function App() {
   const [forecast, setForecast] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = useRef(null);
 
-  const getWeather = async () => {
-    if (!city) return;
+  useEffect(() => {
+    if (!city || city.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `http://localhost:8000/cities?q=${encodeURIComponent(city)}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setSuggestions(data);
+          setShowSuggestions(data.length > 0);
+        }
+      } catch {
+        // ignore suggestion errors
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [city]);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(e.target)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const getSuggestionName = (s) => {
+    if (typeof s === "string") return s;
+    const parts = [s.name, s.state, s.country].filter(Boolean);
+    return parts.join(", ");
+  };
+
+  const selectSuggestion = (s) => {
+    const name = getSuggestionName(s);
+    setShowSuggestions(false);
+    getWeather(name);
+  };
+
+  const getWeather = async (cityOverride) => {
+    const targetCity = cityOverride ?? city;
+    if (!targetCity) return;
     setLoading(true);
     setError(null);
+    setCity("");
 
     try {
       const response_actual_weather = await fetch(
-        `http://localhost:8000/weather?city=${city}`,
+        `http://localhost:8000/weather?city=${encodeURIComponent(targetCity)}`,
       );
       const response_forecast = await fetch(
-        `http://localhost:8000/forecast?city=${city}`,
+        `http://localhost:8000/forecast?city=${encodeURIComponent(targetCity)}`,
       );
       if (!response_actual_weather.ok && !response_forecast.ok) {
         throw new Error("City not found");
@@ -122,6 +177,45 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getLocationWeather = () => {
+    setLoading(true);
+    setError(null);
+    setCity("");
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const geoRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+          );
+          const geoData = await geoRes.json();
+          const cityName =
+            geoData.address.city ||
+            geoData.address.town ||
+            geoData.address.village ||
+            geoData.address.county;
+          if (!cityName) throw new Error("Could not determine city from location");
+          const [weatherRes, forecastRes] = await Promise.all([
+            fetch(`http://localhost:8000/weather?city=${encodeURIComponent(cityName)}`),
+            fetch(`http://localhost:8000/forecast?city=${encodeURIComponent(cityName)}`),
+          ]);
+          const weatherData = await weatherRes.json();
+          const forecastData = await forecastRes.json();
+          setWeather(weatherData);
+          setForecast(forecastData);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      },
+      () => {
+        setError("Location access denied");
+        setLoading(false);
+      },
+    );
   };
 
   function getDailyForecasts(list) {
@@ -156,19 +250,45 @@ function App() {
     <div>
       <h1 style={{ marginBottom: "3rem" }}>Weather App</h1>
 
-      <div className="search-bar">
-        <input
-          type="text"
-          placeholder="Enter city..."
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && getWeather()}
-        />
-        <button onClick={getWeather} disabled={loading}>
-          {loading ? <span className="spinner" /> : "Search"}
-        </button>
+      <div className="search-container" ref={searchContainerRef}>
+        <div className="search-bar">
+          <input
+            type="text"
+            placeholder="Enter city..."
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setShowSuggestions(false);
+                getWeather();
+              } else if (e.key === "Escape") {
+                setShowSuggestions(false);
+              }
+            }}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+          />
+          <button onClick={() => { setShowSuggestions(false); getWeather(); }} disabled={loading}>
+            {loading ? <span className="spinner" /> : "Search"}
+          </button>
+          <button
+            className="geo-btn"
+            onClick={getLocationWeather}
+            disabled={loading}
+            title="Use my location"
+          >
+            <Icon icon="mingcute:location-fill" />
+          </button>
+        </div>
+        {showSuggestions && (
+          <ul className="suggestions">
+            {suggestions.map((s, i) => (
+              <li key={i} onMouseDown={() => selectSuggestion(s)}>
+                {getSuggestionName(s)}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-
 
       {error && <p style={{ color: "red" }}>{error}</p>}
       {weather && (
@@ -182,18 +302,26 @@ function App() {
           >
             {weather.name}
           </h2>
-          <p>🕐 {formatTimeInZone(Math.floor(Date.now() / 1000), weather.timezone)}</p>
-          <p>🌅 {formatTimeInZone(weather.sys.sunrise, weather.timezone)} &nbsp;|&nbsp; 🌇 {formatTimeInZone(weather.sys.sunset, weather.timezone)}</p>
+          <p>
+            🕐{" "}
+            {formatTimeInZone(Math.floor(Date.now() / 1000), weather.timezone)}
+          </p>
+          <p>
+            🌅 {formatTimeInZone(weather.sys.sunrise, weather.timezone)}{" "}
+            &nbsp;|&nbsp; 🌇{" "}
+            {formatTimeInZone(weather.sys.sunset, weather.timezone)}
+          </p>
           <p style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-            Last updated:{" "}
-            <strong>{formatTime(weather.dt)}</strong>
+            Last updated: <strong>{formatTime(weather.dt)}</strong>
           </p>
           <div style={{ padding: "1.5rem 0", overflow: "visible" }}>
-            <Icon icon={getWeatherIcon(weather.weather[0].icon)} className="weather-icon" style={{ fontSize: "5rem" }} />
+            <Icon
+              icon={getWeatherIcon(weather.weather[0].icon)}
+              className="weather-icon"
+              style={{ fontSize: "5rem" }}
+            />
           </div>
-          <h2 style={{ marginBottom: "1.5rem" }}>
-            {weather.weather[0].main}
-          </h2>
+          <h2 style={{ marginBottom: "1.5rem" }}>{weather.weather[0].main}</h2>
           <p>
             Temperature: <strong>{weather.main.temp.toFixed(1)}°C</strong>
           </p>
@@ -204,7 +332,14 @@ function App() {
             Wind direction:{" "}
             <strong>
               {getWindDirection(weather.wind.deg)}{" "}
-              <span style={{ display: "inline-block", transform: `rotate(${weather.wind.deg + 180}deg)` }}>↑</span>
+              <span
+                style={{
+                  display: "inline-block",
+                  transform: `rotate(${weather.wind.deg + 180}deg)`,
+                }}
+              >
+                ↑
+              </span>
             </strong>
           </p>
           <p>
@@ -221,7 +356,7 @@ function App() {
           <div
             style={{ display: "flex", gap: "1rem", justifyContent: "center" }}
           >
-            {getDailyForecasts(forecast.list).map(
+            {getDailyForecasts(forecast.list ?? []).map(
               ({ date, minTemp, main, weather, wind }) => (
                 <div
                   key={date}
@@ -237,7 +372,11 @@ function App() {
                     </strong>
                   </p>
                   <div style={{ padding: "0.75rem 0", overflow: "visible" }}>
-                    <Icon icon={getWeatherIcon(weather[0].icon.replace(/n$/, "d"))} className="weather-icon" style={{ fontSize: "3rem" }} />
+                    <Icon
+                      icon={getWeatherIcon(weather[0].icon.replace(/n$/, "d"))}
+                      className="weather-icon"
+                      style={{ fontSize: "3rem" }}
+                    />
                   </div>
                   <p>{weather[0].description}</p>
                   <p>
@@ -252,7 +391,14 @@ function App() {
                     Wind direction:{" "}
                     <strong>
                       {getWindDirection(wind.deg)}{" "}
-                      <span style={{ display: "inline-block", transform: `rotate(${wind.deg + 180}deg)` }}>↑</span>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          transform: `rotate(${wind.deg + 180}deg)`,
+                        }}
+                      >
+                        ↑
+                      </span>
                     </strong>
                   </p>
                   <p>
