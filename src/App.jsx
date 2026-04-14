@@ -33,7 +33,7 @@ function formatTimeInZone(unix, timezoneOffsetSeconds) {
   return `${h}:${m}`;
 }
 
-function WeatherMap({ weatherPoints, gpxPoints, coloredSegments }) {
+function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments }) {
   const startWeather = weatherPoints?.[0];
   const lat = startWeather?.coord.lat ?? 20;
   const lon = startWeather?.coord.lon ?? 0;
@@ -70,6 +70,13 @@ function WeatherMap({ weatherPoints, gpxPoints, coloredSegments }) {
               radius={7}
               pathOptions={{ color: "#fff", weight: 2, fillColor: "#22c55e", fillOpacity: 1 }}
             />
+            {gpxMidPoint && (
+              <CircleMarker
+                center={[gpxMidPoint.lat, gpxMidPoint.lon]}
+                radius={7}
+                pathOptions={{ color: "#fff", weight: 2, fillColor: "#eab308", fillOpacity: 1 }}
+              />
+            )}
             <Marker
               position={polyline[polyline.length - 1]}
               icon={L.divIcon({
@@ -228,30 +235,82 @@ function App() {
   const [error, setError] = useState(null);
   const [gpxPoints, setGpxPoints] = useState(null);
   const [gpxFileName, setGpxFileName] = useState("");
+  const [avgSpeed, setAvgSpeed] = useState(30);
+  const [speedInput, setSpeedInput] = useState("30");
+  const [gpxMidPoint, setGpxMidPoint] = useState(null);
 
-  const fetchWeatherForRoute = async (points) => {
+
+  const fetchWeatherForRoute = async (points, speedKmh = avgSpeed) => {
     setLoading(true);
     setError(null);
-    const midIdx = Math.floor((points.length - 1) / 2);
-    const coords = [
-      points[0],
-      points[midIdx],
-      points[points.length - 1],
+
+    // Cumulative distances to find the true midpoint by distance
+    const cumDist = [0];
+    for (let i = 0; i < points.length - 1; i++)
+      cumDist.push(cumDist[i] + haversineDistance(points[i].lat, points[i].lon, points[i + 1].lat, points[i + 1].lon));
+    const totalDist = cumDist[cumDist.length - 1];
+    const midIdx = cumDist.reduce((best, d, i) =>
+      Math.abs(d - totalDist / 2) < Math.abs(cumDist[best] - totalDist / 2) ? i : best, 0);
+    setGpxMidPoint(points[midIdx]);
+
+    const AVG_SPEED_MS = speedKmh / 3.6;
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const midEta  = nowUnix + cumDist[midIdx] / AVG_SPEED_MS;
+    const endEta  = nowUnix + totalDist       / AVG_SPEED_MS;
+
+    const checkpoints = [
+      { point: points[0],                  eta: nowUnix },
+      { point: points[midIdx],             eta: midEta  },
+      { point: points[points.length - 1],  eta: endEta  },
     ];
+
     try {
-      const results = await Promise.all(
-        coords.map(({ lat, lon }) =>
-          fetch(`http://localhost:8000/weather/coords?lat=${lat}&lon=${lon}`)
-            .then((r) => r.json())
+      // Current weather at all 3 coords (gives us city names + start conditions)
+      const currents = await Promise.all(
+        checkpoints.map(({ point }) =>
+          fetch(`http://localhost:8000/weather/coords?lat=${point.lat}&lon=${point.lon}`).then(r => r.json())
         )
       );
-      setWeatherPoints(results);
+
+      // Forecast for mid & end (start uses current weather as-is)
+      const [midForecast, endForecast] = await Promise.all([
+        fetch(`http://localhost:8000/forecast?city=${encodeURIComponent(currents[1].name)}`).then(r => r.json()),
+        fetch(`http://localhost:8000/forecast?city=${encodeURIComponent(currents[2].name)}`).then(r => r.json()),
+      ]);
+
+      const pickClosest = (forecastData, eta) => {
+        const list = forecastData.list ?? [];
+        return list.reduce((best, entry) =>
+          Math.abs(entry.dt - eta) < Math.abs(best.dt - eta) ? entry : best, list[0]);
+      };
+
+      const mergeWithForecast = (current, entry) => ({
+        ...current,
+        main: entry.main,
+        wind: entry.wind,
+        weather: entry.weather,
+        dt: entry.dt,
+      });
+
+      setWeatherPoints([
+        { ...currents[0], _eta: nowUnix },
+        { ...mergeWithForecast(currents[1], pickClosest(midForecast, midEta)), _eta: midEta },
+        { ...mergeWithForecast(currents[2], pickClosest(endForecast, endEta)), _eta: endEta },
+      ]);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
+
+  function formatEta(etaUnix, nowUnix) {
+    const diff = etaUnix - nowUnix;
+    if (diff <= 60) return "Now";
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    return h > 0 ? `+${h}h ${m}m` : `+${m}m`;
+  }
 
   function getWindDirection(degrees) {
     const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -264,12 +323,13 @@ function App() {
     if (!file) return;
     setGpxFileName(file.name);
     setWeatherPoints(null);
+    setGpxMidPoint(null);
     const reader = new FileReader();
     reader.onload = (ev) => {
       const points = parseGPX(ev.target.result);
       if (points.length > 1) {
         setGpxPoints(points);
-        fetchWeatherForRoute(points);
+        fetchWeatherForRoute(points, avgSpeed);
       } else {
         setGpxPoints(null);
       }
@@ -312,17 +372,18 @@ function App() {
     pointerEvents: "auto",
   };
 
+  const nowUnixDisplay = Math.floor(Date.now() / 1000);
   const checkpoints = weatherPoints
     ? [
-        { label: "Start", w: weatherPoints[0] },
-        { label: "Mid",   w: weatherPoints[1] },
-        { label: "Finish",w: weatherPoints[2] },
+        { label: "Start",  w: weatherPoints[0] },
+        { label: "Mid",    w: weatherPoints[1] },
+        { label: "Finish", w: weatherPoints[2] },
       ]
     : [];
 
   return (
     <div>
-      <WeatherMap weatherPoints={weatherPoints} gpxPoints={gpxPoints} coloredSegments={coloredSegments} />
+      <WeatherMap weatherPoints={weatherPoints} gpxPoints={gpxPoints} gpxMidPoint={gpxMidPoint} coloredSegments={coloredSegments} />
 
       {/* Top-centre: title + GPX upload */}
       <div
@@ -341,13 +402,21 @@ function App() {
           {gpxFileName || "Upload .gpx file"}
           <input type="file" accept=".gpx" onChange={handleGpxUpload} style={{ display: "none" }} />
         </label>
-        {loading && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", opacity: 0.7 }}>Fetching weather for 3 checkpoints…</p>}
+        {loading && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", opacity: 0.7 }}>Fetching weather and wind data</p>}
         {error && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "#f87171" }}>{error}</p>}
       </div>
 
       {/* Top-left: 3-checkpoint weather panel */}
       {weatherPoints && (
-        <div style={{ ...panelStyle, top: "1rem", left: "1rem" }}>
+        <div style={{ ...panelStyle, top: "1rem", left: "1rem", position: "fixed" }}>
+          {loading && (
+            <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+              <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
+            </div>
+          )}
+          <div style={{ fontSize: "0.75rem", opacity: 0.5, marginBottom: "0.6rem" }}>
+            Conditions on your {routeAnalysis ? routeAnalysis.totalKm.toFixed(1) : "—"} km route
+          </div>
           {/* Averages row */}
           <div style={{ display: "flex", gap: "1.2rem", marginBottom: "0.75rem", paddingBottom: "0.65rem", borderBottom: "1px solid rgba(255,255,255,0.1)", fontSize: "0.85rem" }}>
             <div>
@@ -363,7 +432,10 @@ function App() {
           <div style={{ display: "flex", gap: "1rem" }}>
             {checkpoints.map(({ label, w }) => (
               <div key={label} style={{ textAlign: "center", minWidth: "80px" }}>
-                <div style={{ fontSize: "0.7rem", opacity: 0.6, marginBottom: "0.2rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+                <div style={{ fontSize: "0.7rem", opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+                <div style={{ fontSize: "0.72rem", color: "#60a5fa", marginBottom: "0.2rem" }}>
+                  {formatEta(w._eta, nowUnixDisplay)}
+                </div>
                 <Icon icon={getWeatherIcon(w.weather[0].icon)} style={{ fontSize: "2rem" }} />
                 <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{w.name}</div>
                 <div style={{ fontSize: "1rem", fontWeight: 600 }}>{w.main.temp.toFixed(1)}°C</div>
@@ -378,12 +450,39 @@ function App() {
               </div>
             ))}
           </div>
+          {/* Speed input */}
+          <div style={{ marginTop: "0.75rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Icon icon="mingcute:bike-line" style={{ opacity: 0.6 }} />
+            <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>Avg speed</span>
+            <input
+              type="number"
+              min="1"
+              max="100"
+              value={speedInput}
+              onChange={(e) => setSpeedInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && gpxPoints) {
+                  const parsed = parseFloat(speedInput);
+                  if (!parsed || parsed <= 0) return;
+                  setAvgSpeed(parsed);
+                  fetchWeatherForRoute(gpxPoints, parsed);
+                }
+              }}
+              style={{ width: "64px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", outline: "none", color: "#fff", fontSize: "0.9rem", textAlign: "center", padding: "0.15rem 0.2rem" }}
+            />
+            <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>km/h</span>
+          </div>
         </div>
       )}
 
       {/* Top-right: avg wind direction compass */}
       {avgWindDeg !== null && (
-        <div style={{ ...panelStyle, top: "1rem", right: "1rem", textAlign: "center", minWidth: "150px" }}>
+        <div style={{ ...panelStyle, top: "1rem", right: "1rem", textAlign: "center", minWidth: "150px", position: "fixed" }}>
+          {loading && (
+            <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+              <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
+            </div>
+          )}
           <div style={{ fontSize: "0.72rem", opacity: 0.6, marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
             Avg wind direction
           </div>
@@ -429,6 +528,7 @@ function App() {
         <div
           style={{
             ...panelStyle,
+            position: "fixed",
             bottom: "1.5rem",
             left: "50%",
             transform: "translateX(-50%)",
@@ -436,6 +536,11 @@ function App() {
             textAlign: "center",
           }}
         >
+          {loading && (
+            <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+              <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
+            </div>
+          )}
           <div style={{ fontSize: "0.85rem", marginBottom: "0.6rem", opacity: 0.8 }}>
             {routeAnalysis.totalKm.toFixed(2)} km total
           </div>
