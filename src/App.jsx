@@ -384,9 +384,12 @@ function App() {
         {error && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "#f87171" }}>{error}</p>}
       </div>
 
-      {/* Top-left: 3-checkpoint weather panel */}
+      {/* Left column: weather + wind + elevation */}
       {weatherPoints && (
-        <div style={{ ...panelStyle, top: "1rem", left: "1rem", position: "fixed" }}>
+        <div style={{ position: "fixed", left: "1rem", top: "1rem", bottom: "1rem", zIndex: 10, display: "flex", flexDirection: "column", justifyContent: "space-between", pointerEvents: "none", gap: "1rem" }}>
+
+        {/* Weather panel */}
+        <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto" }}>
           {loading && (
             <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
               <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
@@ -468,6 +471,48 @@ function App() {
             </button>
           </div>
         </div>
+
+        {/* Wind analysis panel */}
+        {routeAnalysis && (
+          <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto", textAlign: "center" }}>
+            {loading && (
+              <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+                <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
+              </div>
+            )}
+            <div style={{ fontSize: "0.85rem", marginBottom: "0.6rem", opacity: 0.8 }}>
+              {routeAnalysis.totalKm.toFixed(2)} km total
+            </div>
+            <div style={{ display: "flex", gap: "1.2rem", justifyContent: "center", marginBottom: "0.75rem" }}>
+              {[
+                { label: "Headwind", value: routeAnalysis.headwind, km: routeAnalysis.headwindKm, color: "#e05555" },
+                { label: "Crosswind", value: routeAnalysis.crosswind, km: routeAnalysis.crosswindKm, color: "#e0a020" },
+                { label: "Tailwind", value: routeAnalysis.tailwind, km: routeAnalysis.tailwindKm, color: "#3daa5a" },
+              ].map(({ label, value, km, color }) => (
+                <div key={label}>
+                  <strong style={{ color, fontSize: "1.1rem" }}>{value.toFixed(1)}%</strong>
+                  <div style={{ fontSize: "0.8rem" }}>{label}</div>
+                  <div style={{ fontSize: "0.75rem", opacity: 0.7 }}>{km.toFixed(2)} km</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ height: "10px", borderRadius: "5px", overflow: "hidden", display: "flex" }}>
+              <div style={{ flex: routeAnalysis.headwind, background: "#e05555" }} />
+              <div style={{ flex: routeAnalysis.crosswind, background: "#e0a020" }} />
+              <div style={{ flex: routeAnalysis.tailwind, background: "#3daa5a" }} />
+            </div>
+          </div>
+        )}
+
+        {/* Elevation panel */}
+        {gpxPoints && gpxPoints.some(p => p.ele != null) && (
+          <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto" }}>
+            <div style={{ fontSize: "0.72rem", opacity: 0.5, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
+            <ElevationChart points={gpxPoints} />
+          </div>
+        )}
+
+        </div>
       )}
 
       {/* Top-right: avg wind direction compass */}
@@ -518,54 +563,6 @@ function App() {
         </div>
       )}
 
-      {/* Bottom-centre: wind analysis */}
-      {gpxPoints && gpxPoints.some(p => p.ele != null) && (
-        <div style={{ ...panelStyle, position: "fixed", bottom: "1.5rem", left: "1rem" }}>
-          <div style={{ fontSize: "0.72rem", opacity: 0.5, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
-          <ElevationChart points={gpxPoints} />
-        </div>
-      )}
-
-      {routeAnalysis && (
-        <div
-          style={{
-            ...panelStyle,
-            position: "fixed",
-            bottom: "1.5rem",
-            left: "50%",
-            transform: "translateX(-50%)",
-            minWidth: "340px",
-            textAlign: "center",
-          }}
-        >
-          {loading && (
-            <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
-              <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
-            </div>
-          )}
-          <div style={{ fontSize: "0.85rem", marginBottom: "0.6rem", opacity: 0.8 }}>
-            {routeAnalysis.totalKm.toFixed(2)} km total
-          </div>
-          <div style={{ display: "flex", gap: "1.2rem", justifyContent: "center", marginBottom: "0.75rem" }}>
-            {[
-              { label: "Headwind", value: routeAnalysis.headwind, km: routeAnalysis.headwindKm, color: "#e05555" },
-              { label: "Crosswind", value: routeAnalysis.crosswind, km: routeAnalysis.crosswindKm, color: "#e0a020" },
-              { label: "Tailwind", value: routeAnalysis.tailwind, km: routeAnalysis.tailwindKm, color: "#3daa5a" },
-            ].map(({ label, value, km, color }) => (
-              <div key={label}>
-                <strong style={{ color, fontSize: "1.1rem" }}>{value.toFixed(1)}%</strong>
-                <div style={{ fontSize: "0.8rem" }}>{label}</div>
-                <div style={{ fontSize: "0.75rem", opacity: 0.7 }}>{km.toFixed(2)} km</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ height: "10px", borderRadius: "5px", overflow: "hidden", display: "flex" }}>
-            <div style={{ flex: routeAnalysis.headwind, background: "#e05555" }} />
-            <div style={{ flex: routeAnalysis.crosswind, background: "#e0a020" }} />
-            <div style={{ flex: routeAnalysis.tailwind, background: "#3daa5a" }} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
