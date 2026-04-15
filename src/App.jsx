@@ -9,7 +9,7 @@ function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   const map = useMap();
   useEffect(() => {
     if (gpxPoints && gpxPoints.length > 1) {
-      map.fitBounds(gpxPoints.map((p) => [p.lat, p.lon]), { padding: [40, 40] });
+      map.fitBounds(gpxPoints.map((p) => [p.lat, p.lon]), { padding: [80, 80] });
     } else {
       map.setView([lat, lon], zoom);
     }
@@ -110,6 +110,60 @@ function getWeatherIcon(iconCode) {
   };
 
   return icons[iconCode] || "meteocons:not-available-fill";
+}
+
+function ElevationChart({ points }) {
+  const eles = points.map(p => p.ele).filter(e => e != null);
+  if (eles.length < 2) return <div style={{ fontSize: "0.75rem", opacity: 0.5 }}>No elevation data</div>;
+
+  const step = Math.max(1, Math.floor(points.length / 400));
+  const sampled = points.filter((_, i) => i % step === 0 || i === points.length - 1).map(p => p.ele ?? 0);
+
+  const minE = Math.min(...sampled);
+  const maxE = Math.max(...sampled);
+  const range = maxE - minE || 1;
+
+  const W = 300, H = 70;
+  const PL = 36, PR = 8, PT = 6, PB = 16;
+  const iW = W - PL - PR, iH = H - PT - PB;
+
+  const toX = (i) => PL + (i / (sampled.length - 1)) * iW;
+  const toY = (e) => PT + iH - ((e - minE) / range) * iH;
+
+  const pts = sampled.map((e, i) => `${toX(i).toFixed(1)},${toY(e).toFixed(1)}`).join(" L ");
+  const area = `M ${pts} L ${toX(sampled.length - 1).toFixed(1)},${(PT + iH).toFixed(1)} L ${toX(0).toFixed(1)},${(PT + iH).toFixed(1)} Z`;
+
+  let gain = 0, loss = 0;
+  for (let i = 1; i < eles.length; i++) {
+    const d = eles[i] - eles[i - 1];
+    if (d > 0) gain += d; else loss += Math.abs(d);
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "1rem", marginBottom: "0.4rem", fontSize: "0.8rem" }}>
+        <span style={{ color: "#4ade80" }}>↑ {Math.round(gain)} m</span>
+        <span style={{ color: "#f87171" }}>↓ {Math.round(loss)} m</span>
+        <span style={{ opacity: 0.5 }}>{Math.round(minE)}–{Math.round(maxE)} m</span>
+      </div>
+      <svg width={W} height={H} style={{ display: "block" }}>
+        <defs>
+          <linearGradient id="ele-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.03" />
+          </linearGradient>
+        </defs>
+        <line x1={PL} y1={PT} x2={PL} y2={PT + iH} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+        <line x1={PL} y1={PT + iH} x2={PL + iW} y2={PT + iH} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+        <path d={area} fill="url(#ele-fill)" />
+        <path d={`M ${pts}`} fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinejoin="round" />
+        <text x={PL - 3} y={PT + 4} textAnchor="end" fill="rgba(255,255,255,0.45)" fontSize="9">{Math.round(maxE)}</text>
+        <text x={PL - 3} y={PT + iH + 1} textAnchor="end" fill="rgba(255,255,255,0.45)" fontSize="9">{Math.round(minE)}</text>
+        <text x={PL} y={H} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9">Start</text>
+        <text x={PL + iW} y={H} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9">End</text>
+      </svg>
+    </div>
+  );
 }
 
 async function parseGPX(text) {
@@ -457,6 +511,13 @@ function App() {
       )}
 
       {/* Bottom-centre: wind analysis */}
+      {gpxPoints && gpxPoints.some(p => p.ele != null) && (
+        <div style={{ ...panelStyle, position: "fixed", bottom: "1.5rem", left: "1rem" }}>
+          <div style={{ fontSize: "0.72rem", opacity: 0.5, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
+          <ElevationChart points={gpxPoints} />
+        </div>
+      )}
+
       {routeAnalysis && (
         <div
           style={{
