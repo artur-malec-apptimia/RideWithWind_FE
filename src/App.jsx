@@ -17,22 +17,6 @@ function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   return null;
 }
 
-function formatTime(unix) {
-  return new Date(unix * 1000).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-function formatTimeInZone(unix, timezoneOffsetSeconds) {
-  const utcMs = unix * 1000 + timezoneOffsetSeconds * 1000;
-  const d = new Date(utcMs);
-  const h = String(d.getUTCHours()).padStart(2, "0");
-  const m = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
-}
-
 function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments }) {
   const startWeather = weatherPoints?.[0];
   const lat = startWeather?.coord.lat ?? 20;
@@ -261,62 +245,16 @@ function App() {
   const fetchWeatherForRoute = async (points, speedKmh = avgSpeed, startUnix) => {
     setLoading(true);
     setError(null);
-
-    const plannedStart = startUnix ?? getStartUnix();
-
-    // Cumulative distances to find the true midpoint by distance
-    const cumDist = [0];
-    for (let i = 0; i < points.length - 1; i++)
-      cumDist.push(cumDist[i] + haversineDistance(points[i].lat, points[i].lon, points[i + 1].lat, points[i + 1].lon));
-    const totalDist = cumDist[cumDist.length - 1];
-    const midIdx = cumDist.reduce((best, d, i) =>
-      Math.abs(d - totalDist / 2) < Math.abs(cumDist[best] - totalDist / 2) ? i : best, 0);
-    setGpxMidPoint(points[midIdx]);
-
-    const AVG_SPEED_MS = speedKmh / 3.6;
-    const midEta = plannedStart + cumDist[midIdx] / AVG_SPEED_MS;
-    const endEta = plannedStart + totalDist       / AVG_SPEED_MS;
-
-    const checkpoints = [
-      { point: points[0],                 eta: plannedStart },
-      { point: points[midIdx],            eta: midEta       },
-      { point: points[points.length - 1], eta: endEta       },
-    ];
-
     try {
-      // Current weather at all 3 coords (for city names)
-      const currents = await Promise.all(
-        checkpoints.map(({ point }) =>
-          fetch(`http://localhost:8000/weather/coords?lat=${point.lat}&lon=${point.lon}`).then(r => r.json())
-        )
-      );
-
-      // Forecast for all 3 checkpoints — start uses forecast matched to planned time
-      const [startForecast, midForecast, endForecast] = await Promise.all(
-        currents.map(c =>
-          fetch(`http://localhost:8000/forecast?city=${encodeURIComponent(c.name)}`).then(r => r.json())
-        )
-      );
-
-      const pickClosest = (forecastData, eta) => {
-        const list = forecastData.list ?? [];
-        return list.reduce((best, entry) =>
-          Math.abs(entry.dt - eta) < Math.abs(best.dt - eta) ? entry : best, list[0]);
-      };
-
-      const mergeWithForecast = (current, entry) => ({
-        ...current,
-        main: entry.main,
-        wind: entry.wind,
-        weather: entry.weather,
-        dt: entry.dt,
+      const res = await fetch("http://localhost:8000/route-weather", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ points, speed_kmh: speedKmh, start_unix: startUnix }),
       });
-
-      setWeatherPoints([
-        { ...mergeWithForecast(currents[0], pickClosest(startForecast, plannedStart)), _eta: plannedStart },
-        { ...mergeWithForecast(currents[1], pickClosest(midForecast,   midEta)),       _eta: midEta       },
-        { ...mergeWithForecast(currents[2], pickClosest(endForecast,   endEta)),       _eta: endEta       },
-      ]);
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const { mid_point, weather_points } = await res.json();
+      setGpxMidPoint(mid_point);
+      setWeatherPoints(weather_points);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -533,7 +471,7 @@ function App() {
                   const parsed = parseFloat(speedInput);
                   if (!parsed || parsed <= 0) return;
                   setAvgSpeed(parsed);
-                  fetchWeatherForRoute(gpxPoints, parsed);
+                  fetchWeatherForRoute(gpxPoints, parsed, getStartUnix());
                 }
               }}
               style={{ width: "64px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", outline: "none", color: "#fff", fontSize: "0.9rem", textAlign: "center", padding: "0.15rem 0.2rem" }}
@@ -544,7 +482,7 @@ function App() {
                 const parsed = parseFloat(speedInput);
                 if (!parsed || parsed <= 0) return;
                 setAvgSpeed(parsed);
-                fetchWeatherForRoute(gpxPoints, parsed);
+                fetchWeatherForRoute(gpxPoints, parsed, getStartUnix());
               }}
               disabled={loading}
               title="Refresh with new speed"
