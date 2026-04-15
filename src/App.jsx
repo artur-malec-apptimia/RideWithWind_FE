@@ -110,27 +110,6 @@ function getWeatherIcon(iconCode) {
   return icons[iconCode] || "meteocons:not-available-fill";
 }
 
-function haversineDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function calculateBearing(lat1, lon1, lat2, lon2) {
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLon = toRad(lon2 - lon1);
-  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
-  const x =
-    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
-  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
-}
-
 async function parseGPX(text) {
     const res = await fetch("http://localhost:8000/parse-gpx", {
       method: "POST",
@@ -139,80 +118,6 @@ async function parseGPX(text) {
     });
     return res.json(); // [{lat, lon}, ...]
   }
-
-const WIND_COLORS = { headwind: "#e05555", crosswind: "#e0a020", tailwind: "#3daa5a" };
-
-function segmentWindColor(windDeg, bearing) {
-  let diff = Math.abs(windDeg - bearing);
-  if (diff > 180) diff = 360 - diff;
-  if (diff < 60) return WIND_COLORS.headwind;
-  if (diff > 120) return WIND_COLORS.tailwind;
-  return WIND_COLORS.crosswind;
-}
-
-function buildColoredSegments(points, windDegrees) {
-  const third = Math.floor((points.length - 1) / 3);
-  const result = [];
-  let currentColor = null;
-  let currentPositions = [];
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const windIdx = i < third ? 0 : i < third * 2 ? 1 : 2;
-    const bearing = calculateBearing(points[i].lat, points[i].lon, points[i + 1].lat, points[i + 1].lon);
-    const color = segmentWindColor(windDegrees[windIdx], bearing);
-
-    if (color !== currentColor) {
-      if (currentPositions.length > 0) {
-        currentPositions.push([points[i].lat, points[i].lon]);
-        result.push({ positions: currentPositions, color: currentColor });
-      }
-      currentColor = color;
-      currentPositions = [[points[i].lat, points[i].lon]];
-    }
-    currentPositions.push([points[i + 1].lat, points[i + 1].lon]);
-  }
-  if (currentPositions.length > 0) result.push({ positions: currentPositions, color: currentColor });
-  return result;
-}
-
-// windDegrees: [startDeg, midDeg, endDeg] — each applied to its third of the route
-function analyzeRouteWind(points, windDegrees) {
-  let headwind = 0, tailwind = 0, crosswind = 0, total = 0;
-  const third = Math.floor((points.length - 1) / 3);
-  const segments = [
-    { from: 0,       to: third,              wind: windDegrees[0] },
-    { from: third,   to: third * 2,          wind: windDegrees[1] },
-    { from: third * 2, to: points.length - 1, wind: windDegrees[2] },
-  ];
-  for (const { from, to, wind } of segments) {
-    for (let i = from; i < to; i++) {
-      const dist = haversineDistance(
-        points[i].lat, points[i].lon,
-        points[i + 1].lat, points[i + 1].lon
-      );
-      const bearing = calculateBearing(
-        points[i].lat, points[i].lon,
-        points[i + 1].lat, points[i + 1].lon
-      );
-      let diff = Math.abs(wind - bearing);
-      if (diff > 180) diff = 360 - diff;
-      total += dist;
-      if (diff < 60) headwind += dist;
-      else if (diff > 120) tailwind += dist;
-      else crosswind += dist;
-    }
-  }
-  if (total === 0) return null;
-  return {
-    headwind: (headwind / total) * 100,
-    tailwind: (tailwind / total) * 100,
-    crosswind: (crosswind / total) * 100,
-    headwindKm: headwind / 1000,
-    tailwindKm: tailwind / 1000,
-    crosswindKm: crosswind / 1000,
-    totalKm: total / 1000,
-  };
-}
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
@@ -238,6 +143,8 @@ function App() {
   const [gpxMidPoint, setGpxMidPoint] = useState(null);
   const [startDate, setStartDate] = useState(todayStr);
   const [startTime, setStartTime] = useState(nowTimeStr);
+  const [routeAnalysis, setRouteAnalysis] = useState(null);
+  const [coloredSegments, setColoredSegments] = useState(null);
 
   const getStartUnix = (date = startDate, time = startTime) =>
     Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
@@ -255,6 +162,16 @@ function App() {
       const { mid_point, weather_points } = await res.json();
       setGpxMidPoint(mid_point);
       setWeatherPoints(weather_points);
+
+      const windDegrees = weather_points.map((w) => w.wind.deg);
+      const body = JSON.stringify({ points, wind_degrees: windDegrees });
+      const headers = { "Content-Type": "application/json" };
+      const [analysis, segments] = await Promise.all([
+        fetch("http://localhost:8000/analyze-wind", { method: "POST", headers, body }).then((r) => r.json()),
+        fetch("http://localhost:8000/colored-segments", { method: "POST", headers, body }).then((r) => r.json()),
+      ]);
+      setRouteAnalysis(analysis);
+      setColoredSegments(segments);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -294,14 +211,6 @@ function App() {
     setStartDate(newDate);
     setStartTime(newTime);
   };
-
-  const windDegrees = weatherPoints ? weatherPoints.map((w) => w.wind.deg) : null;
-
-  const routeAnalysis =
-    gpxPoints && windDegrees ? analyzeRouteWind(gpxPoints, windDegrees) : null;
-
-  const coloredSegments =
-    gpxPoints && windDegrees ? buildColoredSegments(gpxPoints, windDegrees) : null;
 
   const avgTemp = weatherPoints
     ? weatherPoints.reduce((s, w) => s + w.main.temp, 0) / weatherPoints.length
