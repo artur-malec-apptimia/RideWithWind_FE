@@ -147,13 +147,14 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
-function parseGPX(text) {
-  const xml = new DOMParser().parseFromString(text, "text/xml");
-  return Array.from(xml.querySelectorAll("trkpt")).map((pt) => ({
-    lat: parseFloat(pt.getAttribute("lat")),
-    lon: parseFloat(pt.getAttribute("lon")),
-  }));
-}
+async function parseGPX(text) {
+    const res = await fetch("http://localhost:8000/parse-gpx", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: text,
+    });
+    return res.json(); // [{lat, lon}, ...]
+  }
 
 const WIND_COLORS = { headwind: "#e05555", crosswind: "#e0a020", tailwind: "#3daa5a" };
 
@@ -344,8 +345,8 @@ function App() {
     setWeatherPoints(null);
     setGpxMidPoint(null);
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const points = parseGPX(ev.target.result);
+    reader.onload = async (ev) => {
+      const points = await parseGPX(ev.target.result);
       setGpxPoints(points.length > 1 ? points : null);
     };
     reader.readAsText(file);
