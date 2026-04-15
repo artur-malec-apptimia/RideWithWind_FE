@@ -229,6 +229,19 @@ function analyzeRouteWind(points, windDegrees) {
   };
 }
 
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+function nowTimeStr() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function maxDateStr() {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  return d.toISOString().split("T")[0];
+}
+
 function App() {
   const [weatherPoints, setWeatherPoints] = useState(null); // [start, mid, end]
   const [loading, setLoading] = useState(false);
@@ -238,11 +251,17 @@ function App() {
   const [avgSpeed, setAvgSpeed] = useState(30);
   const [speedInput, setSpeedInput] = useState("30");
   const [gpxMidPoint, setGpxMidPoint] = useState(null);
+  const [startDate, setStartDate] = useState(todayStr);
+  const [startTime, setStartTime] = useState(nowTimeStr);
 
+  const getStartUnix = (date = startDate, time = startTime) =>
+    Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
 
-  const fetchWeatherForRoute = async (points, speedKmh = avgSpeed) => {
+  const fetchWeatherForRoute = async (points, speedKmh = avgSpeed, startUnix) => {
     setLoading(true);
     setError(null);
+
+    const plannedStart = startUnix ?? getStartUnix();
 
     // Cumulative distances to find the true midpoint by distance
     const cumDist = [0];
@@ -254,29 +273,29 @@ function App() {
     setGpxMidPoint(points[midIdx]);
 
     const AVG_SPEED_MS = speedKmh / 3.6;
-    const nowUnix = Math.floor(Date.now() / 1000);
-    const midEta  = nowUnix + cumDist[midIdx] / AVG_SPEED_MS;
-    const endEta  = nowUnix + totalDist       / AVG_SPEED_MS;
+    const midEta = plannedStart + cumDist[midIdx] / AVG_SPEED_MS;
+    const endEta = plannedStart + totalDist       / AVG_SPEED_MS;
 
     const checkpoints = [
-      { point: points[0],                  eta: nowUnix },
-      { point: points[midIdx],             eta: midEta  },
-      { point: points[points.length - 1],  eta: endEta  },
+      { point: points[0],                 eta: plannedStart },
+      { point: points[midIdx],            eta: midEta       },
+      { point: points[points.length - 1], eta: endEta       },
     ];
 
     try {
-      // Current weather at all 3 coords (gives us city names + start conditions)
+      // Current weather at all 3 coords (for city names)
       const currents = await Promise.all(
         checkpoints.map(({ point }) =>
           fetch(`http://localhost:8000/weather/coords?lat=${point.lat}&lon=${point.lon}`).then(r => r.json())
         )
       );
 
-      // Forecast for mid & end (start uses current weather as-is)
-      const [midForecast, endForecast] = await Promise.all([
-        fetch(`http://localhost:8000/forecast?city=${encodeURIComponent(currents[1].name)}`).then(r => r.json()),
-        fetch(`http://localhost:8000/forecast?city=${encodeURIComponent(currents[2].name)}`).then(r => r.json()),
-      ]);
+      // Forecast for all 3 checkpoints — start uses forecast matched to planned time
+      const [startForecast, midForecast, endForecast] = await Promise.all(
+        currents.map(c =>
+          fetch(`http://localhost:8000/forecast?city=${encodeURIComponent(c.name)}`).then(r => r.json())
+        )
+      );
 
       const pickClosest = (forecastData, eta) => {
         const list = forecastData.list ?? [];
@@ -293,9 +312,9 @@ function App() {
       });
 
       setWeatherPoints([
-        { ...currents[0], _eta: nowUnix },
-        { ...mergeWithForecast(currents[1], pickClosest(midForecast, midEta)), _eta: midEta },
-        { ...mergeWithForecast(currents[2], pickClosest(endForecast, endEta)), _eta: endEta },
+        { ...mergeWithForecast(currents[0], pickClosest(startForecast, plannedStart)), _eta: plannedStart },
+        { ...mergeWithForecast(currents[1], pickClosest(midForecast,   midEta)),       _eta: midEta       },
+        { ...mergeWithForecast(currents[2], pickClosest(endForecast,   endEta)),       _eta: endEta       },
       ]);
     } catch (err) {
       setError(err.message);
@@ -327,14 +346,14 @@ function App() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const points = parseGPX(ev.target.result);
-      if (points.length > 1) {
-        setGpxPoints(points);
-        fetchWeatherForRoute(points, avgSpeed);
-      } else {
-        setGpxPoints(null);
-      }
+      setGpxPoints(points.length > 1 ? points : null);
     };
     reader.readAsText(file);
+  };
+
+  const handleDateTimeChange = (newDate, newTime) => {
+    setStartDate(newDate);
+    setStartTime(newTime);
   };
 
   const windDegrees = weatherPoints ? weatherPoints.map((w) => w.wind.deg) : null;
@@ -372,7 +391,7 @@ function App() {
     pointerEvents: "auto",
   };
 
-  const nowUnixDisplay = Math.floor(Date.now() / 1000);
+  const nowUnixDisplay = weatherPoints ? weatherPoints[0]._eta : Math.floor(Date.now() / 1000);
   const checkpoints = weatherPoints
     ? [
         { label: "Start",  w: weatherPoints[0] },
@@ -397,11 +416,55 @@ function App() {
         }}
       >
         <h1 style={{ margin: "0 0 0.75rem", fontSize: "1.5rem" }}>RideWithWind</h1>
-        <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", padding: "0.4rem 1rem", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "6px" }}>
-          <Icon icon="mingcute:file-upload-line" />
-          {gpxFileName || "Upload .gpx file"}
-          <input type="file" accept=".gpx" onChange={handleGpxUpload} style={{ display: "none" }} />
-        </label>
+        {/* Date & time pickers */}
+        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.2rem" }}>
+            <span style={{ fontSize: "0.7rem", opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Start date</span>
+            <input
+              type="date"
+              value={startDate}
+              min={todayStr()}
+              max={maxDateStr()}
+              onChange={(e) => handleDateTimeChange(e.target.value, startTime)}
+              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#fff", fontSize: "0.85rem", padding: "0.3rem 0.5rem", outline: "none", colorScheme: "dark" }}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.2rem" }}>
+            <span style={{ fontSize: "0.7rem", opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Start time</span>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => handleDateTimeChange(startDate, e.target.value)}
+              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#fff", fontSize: "0.85rem", padding: "0.3rem 0.5rem", outline: "none", colorScheme: "dark" }}
+            />
+          </div>
+        </div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", padding: "0.4rem 1rem", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "6px" }}>
+            <Icon icon="mingcute:file-upload-line" />
+            {gpxFileName || "Upload .gpx file"}
+            <input type="file" accept=".gpx" onChange={handleGpxUpload} style={{ display: "none" }} />
+          </label>
+          {!weatherPoints ? (
+            <button
+              disabled={!gpxPoints || loading}
+              onClick={() => fetchWeatherForRoute(gpxPoints, avgSpeed, getStartUnix())}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.4rem 1rem", borderRadius: "6px", border: "none", cursor: gpxPoints && !loading ? "pointer" : "not-allowed", fontWeight: 600, fontSize: "0.85rem", background: gpxPoints && !loading ? "#3b82f6" : "rgba(255,255,255,0.1)", color: gpxPoints && !loading ? "#fff" : "rgba(255,255,255,0.35)", transition: "background 0.15s" }}
+            >
+              <Icon icon="mingcute:check-line" />
+              Analyze route
+            </button>
+          ) : (
+            <button
+              onClick={() => fetchWeatherForRoute(gpxPoints, avgSpeed, getStartUnix())}
+              disabled={loading}
+              title="Refresh weather"
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#fff", cursor: loading ? "not-allowed" : "pointer", padding: "0.4rem 0.6rem", fontSize: "1rem", lineHeight: 1 }}
+            >
+              <Icon icon="mingcute:refresh-2-line" />
+            </button>
+          )}
+        </div>
         {loading && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", opacity: 0.7 }}>Fetching weather and wind data</p>}
         {error && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "#f87171" }}>{error}</p>}
       </div>
@@ -434,7 +497,11 @@ function App() {
               <div key={label} style={{ textAlign: "center", minWidth: "80px" }}>
                 <div style={{ fontSize: "0.7rem", opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
                 <div style={{ fontSize: "0.72rem", color: "#60a5fa", marginBottom: "0.2rem" }}>
-                  {formatEta(w._eta, nowUnixDisplay)}
+                  {label === "Start"
+                    ? (startDate === todayStr()
+                        ? startTime
+                        : `${new Date(`${startDate}T${startTime}`).toLocaleDateString([], { month: "short", day: "numeric" })} · ${startTime}`)
+                    : formatEta(w._eta, nowUnixDisplay)}
                 </div>
                 <Icon icon={getWeatherIcon(w.weather[0].icon)} style={{ fontSize: "2rem" }} />
                 <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{w.name}</div>
@@ -471,6 +538,19 @@ function App() {
               style={{ width: "64px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", outline: "none", color: "#fff", fontSize: "0.9rem", textAlign: "center", padding: "0.15rem 0.2rem" }}
             />
             <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>km/h</span>
+            <button
+              onClick={() => {
+                const parsed = parseFloat(speedInput);
+                if (!parsed || parsed <= 0) return;
+                setAvgSpeed(parsed);
+                fetchWeatherForRoute(gpxPoints, parsed);
+              }}
+              disabled={loading}
+              title="Refresh with new speed"
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", color: "#fff", cursor: loading ? "not-allowed" : "pointer", padding: "0.2rem 0.35rem", fontSize: "0.85rem", lineHeight: 1 }}
+            >
+              <Icon icon="mingcute:refresh-2-line" />
+            </button>
           </div>
         </div>
       )}
