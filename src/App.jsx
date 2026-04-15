@@ -4,6 +4,7 @@ import L from "leaflet";
 import "./App.css";
 import "leaflet/dist/leaflet.css";
 import { Icon } from "@iconify/react";
+import cyclistBg from "./assets/CyclistBackground.jpg";
 
 function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   const map = useMap();
@@ -309,15 +310,22 @@ function App() {
 
   return (
     <div>
-      <WeatherMap weatherPoints={weatherPoints} gpxPoints={gpxPoints} gpxMidPoint={gpxMidPoint} coloredSegments={coloredSegments} />
+      {gpxPoints ? (
+        <WeatherMap weatherPoints={weatherPoints} gpxPoints={gpxPoints} gpxMidPoint={gpxMidPoint} coloredSegments={coloredSegments} />
+      ) : (
+        <div style={{ position: "fixed", inset: 0, zIndex: 0 }}>
+          <img src={cyclistBg} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
+        </div>
+      )}
 
       {/* Top-centre: title + GPX upload */}
       <div
         style={{
           ...panelStyle,
-          top: "1rem",
-          left: "50%",
-          transform: "translateX(-50%)",
+          ...(gpxPoints
+            ? { top: "1rem", left: "50%", transform: "translateX(-50%)" }
+            : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }),
           textAlign: "center",
           minWidth: "260px",
         }}
