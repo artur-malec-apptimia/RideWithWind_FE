@@ -1,12 +1,19 @@
-import { useState, useEffect, useRef } from "react";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { useState, useEffect } from "react";
+import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, ZoomControl, useMap } from "react-leaflet";
+import L from "leaflet";
 import "./App.css";
 import "leaflet/dist/leaflet.css";
 import { Icon } from "@iconify/react";
 
-function MapUpdater({ lat, lon, zoom }) {
+function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   const map = useMap();
-  map.setView([lat, lon], zoom);
+  useEffect(() => {
+    if (gpxPoints && gpxPoints.length > 1) {
+      map.fitBounds(gpxPoints.map((p) => [p.lat, p.lon]), { padding: [40, 40] });
+    } else {
+      map.setView([lat, lon], zoom);
+    }
+  }, [lat, lon, zoom, gpxPoints]);
   return null;
 }
 
@@ -26,18 +33,18 @@ function formatTimeInZone(unix, timezoneOffsetSeconds) {
   return `${h}:${m}`;
 }
 
-function WeatherMap({ weather }) {
-  const lat = weather?.coord.lat ?? 20;
-  const lon = weather?.coord.lon ?? 0;
-  const zoom = weather ? 12 : 2;
+function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments }) {
+  const startWeather = weatherPoints?.[0];
+  const lat = startWeather?.coord.lat ?? 20;
+  const lon = startWeather?.coord.lon ?? 0;
+  const zoom = startWeather ? 12 : 2;
+  const polyline = gpxPoints ? gpxPoints.map((p) => [p.lat, p.lon]) : null;
   return (
     <div
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: -1,
-        opacity: 0.3,
-        pointerEvents: "none",
+        zIndex: 0,
       }}
     >
       <MapContainer
@@ -45,15 +52,41 @@ function WeatherMap({ weather }) {
         zoom={zoom}
         style={{ width: "100%", height: "100%" }}
         zoomControl={false}
-        dragging={false}
-        scrollWheelZoom={false}
-        doubleClickZoom={false}
-        touchZoom={false}
-        keyboard={false}
         attributionControl={false}
       >
         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}" />
-<MapUpdater lat={lat} lon={lon} zoom={zoom} />
+        <ZoomControl position="bottomright" />
+        <MapUpdater lat={lat} lon={lon} zoom={zoom} gpxPoints={gpxPoints} />
+        {polyline && (
+          <>
+            {coloredSegments
+              ? coloredSegments.map((seg, i) => (
+                  <Polyline key={i} positions={seg.positions} pathOptions={{ color: seg.color, weight: 4 }} />
+                ))
+              : <Polyline positions={polyline} pathOptions={{ color: "#555566", weight: 4 }} />
+            }
+            <CircleMarker
+              center={polyline[0]}
+              radius={7}
+              pathOptions={{ color: "#fff", weight: 2, fillColor: "#22c55e", fillOpacity: 1 }}
+            />
+            {gpxMidPoint && (
+              <CircleMarker
+                center={[gpxMidPoint.lat, gpxMidPoint.lon]}
+                radius={7}
+                pathOptions={{ color: "#fff", weight: 2, fillColor: "#eab308", fillOpacity: 1 }}
+              />
+            )}
+            <Marker
+              position={polyline[polyline.length - 1]}
+              icon={L.divIcon({
+                className: "",
+                html: '<span style="font-size:1rem;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5))">🏁</span>',
+                iconAnchor: [12, 24],
+              })}
+            />
+          </>
+        )}
       </MapContainer>
     </div>
   );
@@ -93,85 +126,196 @@ function getWeatherIcon(iconCode) {
   return icons[iconCode] || "meteocons:not-available-fill";
 }
 
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calculateBearing(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLon = toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+  const x =
+    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+function parseGPX(text) {
+  const xml = new DOMParser().parseFromString(text, "text/xml");
+  return Array.from(xml.querySelectorAll("trkpt")).map((pt) => ({
+    lat: parseFloat(pt.getAttribute("lat")),
+    lon: parseFloat(pt.getAttribute("lon")),
+  }));
+}
+
+const WIND_COLORS = { headwind: "#e05555", crosswind: "#e0a020", tailwind: "#3daa5a" };
+
+function segmentWindColor(windDeg, bearing) {
+  let diff = Math.abs(windDeg - bearing);
+  if (diff > 180) diff = 360 - diff;
+  if (diff < 60) return WIND_COLORS.headwind;
+  if (diff > 120) return WIND_COLORS.tailwind;
+  return WIND_COLORS.crosswind;
+}
+
+function buildColoredSegments(points, windDegrees) {
+  const third = Math.floor((points.length - 1) / 3);
+  const result = [];
+  let currentColor = null;
+  let currentPositions = [];
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const windIdx = i < third ? 0 : i < third * 2 ? 1 : 2;
+    const bearing = calculateBearing(points[i].lat, points[i].lon, points[i + 1].lat, points[i + 1].lon);
+    const color = segmentWindColor(windDegrees[windIdx], bearing);
+
+    if (color !== currentColor) {
+      if (currentPositions.length > 0) {
+        currentPositions.push([points[i].lat, points[i].lon]);
+        result.push({ positions: currentPositions, color: currentColor });
+      }
+      currentColor = color;
+      currentPositions = [[points[i].lat, points[i].lon]];
+    }
+    currentPositions.push([points[i + 1].lat, points[i + 1].lon]);
+  }
+  if (currentPositions.length > 0) result.push({ positions: currentPositions, color: currentColor });
+  return result;
+}
+
+// windDegrees: [startDeg, midDeg, endDeg] — each applied to its third of the route
+function analyzeRouteWind(points, windDegrees) {
+  let headwind = 0, tailwind = 0, crosswind = 0, total = 0;
+  const third = Math.floor((points.length - 1) / 3);
+  const segments = [
+    { from: 0,       to: third,              wind: windDegrees[0] },
+    { from: third,   to: third * 2,          wind: windDegrees[1] },
+    { from: third * 2, to: points.length - 1, wind: windDegrees[2] },
+  ];
+  for (const { from, to, wind } of segments) {
+    for (let i = from; i < to; i++) {
+      const dist = haversineDistance(
+        points[i].lat, points[i].lon,
+        points[i + 1].lat, points[i + 1].lon
+      );
+      const bearing = calculateBearing(
+        points[i].lat, points[i].lon,
+        points[i + 1].lat, points[i + 1].lon
+      );
+      let diff = Math.abs(wind - bearing);
+      if (diff > 180) diff = 360 - diff;
+      total += dist;
+      if (diff < 60) headwind += dist;
+      else if (diff > 120) tailwind += dist;
+      else crosswind += dist;
+    }
+  }
+  if (total === 0) return null;
+  return {
+    headwind: (headwind / total) * 100,
+    tailwind: (tailwind / total) * 100,
+    crosswind: (crosswind / total) * 100,
+    headwindKm: headwind / 1000,
+    tailwindKm: tailwind / 1000,
+    crosswindKm: crosswind / 1000,
+    totalKm: total / 1000,
+  };
+}
+
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+function nowTimeStr() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function maxDateStr() {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  return d.toISOString().split("T")[0];
+}
+
 function App() {
-  const [city, setCity] = useState("");
-  const [weather, setWeather] = useState(null);
-  const [forecast, setForecast] = useState(null);
+  const [weatherPoints, setWeatherPoints] = useState(null); // [start, mid, end]
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const searchContainerRef = useRef(null);
+  const [gpxPoints, setGpxPoints] = useState(null);
+  const [gpxFileName, setGpxFileName] = useState("");
+  const [avgSpeed, setAvgSpeed] = useState(30);
+  const [speedInput, setSpeedInput] = useState("30");
+  const [gpxMidPoint, setGpxMidPoint] = useState(null);
+  const [startDate, setStartDate] = useState(todayStr);
+  const [startTime, setStartTime] = useState(nowTimeStr);
 
-  useEffect(() => {
-    if (!city || city.length < 2) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `http://localhost:8000/cities?q=${encodeURIComponent(city)}`,
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setSuggestions(data);
-          setShowSuggestions(data.length > 0);
-        }
-      } catch {
-        // ignore suggestion errors
-      }
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [city]);
+  const getStartUnix = (date = startDate, time = startTime) =>
+    Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
 
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (
-        searchContainerRef.current &&
-        !searchContainerRef.current.contains(e.target)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  const getSuggestionName = (s) => {
-    if (typeof s === "string") return s;
-    const parts = [s.name, s.state, s.country].filter(Boolean);
-    return parts.join(", ");
-  };
-
-  const selectSuggestion = (s) => {
-    const name = getSuggestionName(s);
-    setShowSuggestions(false);
-    getWeather(name);
-  };
-
-  const getWeather = async (cityOverride) => {
-    const targetCity = cityOverride ?? city;
-    if (!targetCity) return;
+  const fetchWeatherForRoute = async (points, speedKmh = avgSpeed, startUnix) => {
     setLoading(true);
     setError(null);
-    setCity("");
+
+    const plannedStart = startUnix ?? getStartUnix();
+
+    // Cumulative distances to find the true midpoint by distance
+    const cumDist = [0];
+    for (let i = 0; i < points.length - 1; i++)
+      cumDist.push(cumDist[i] + haversineDistance(points[i].lat, points[i].lon, points[i + 1].lat, points[i + 1].lon));
+    const totalDist = cumDist[cumDist.length - 1];
+    const midIdx = cumDist.reduce((best, d, i) =>
+      Math.abs(d - totalDist / 2) < Math.abs(cumDist[best] - totalDist / 2) ? i : best, 0);
+    setGpxMidPoint(points[midIdx]);
+
+    const AVG_SPEED_MS = speedKmh / 3.6;
+    const midEta = plannedStart + cumDist[midIdx] / AVG_SPEED_MS;
+    const endEta = plannedStart + totalDist       / AVG_SPEED_MS;
+
+    const checkpoints = [
+      { point: points[0],                 eta: plannedStart },
+      { point: points[midIdx],            eta: midEta       },
+      { point: points[points.length - 1], eta: endEta       },
+    ];
 
     try {
-      const response_actual_weather = await fetch(
-        `http://localhost:8000/weather?city=${encodeURIComponent(targetCity)}`,
+      // Current weather at all 3 coords (for city names)
+      const currents = await Promise.all(
+        checkpoints.map(({ point }) =>
+          fetch(`http://localhost:8000/weather/coords?lat=${point.lat}&lon=${point.lon}`).then(r => r.json())
+        )
       );
-      const response_forecast = await fetch(
-        `http://localhost:8000/forecast?city=${encodeURIComponent(targetCity)}`,
+
+      // Forecast for all 3 checkpoints — start uses forecast matched to planned time
+      const [startForecast, midForecast, endForecast] = await Promise.all(
+        currents.map(c =>
+          fetch(`http://localhost:8000/forecast?city=${encodeURIComponent(c.name)}`).then(r => r.json())
+        )
       );
-      if (!response_actual_weather.ok && !response_forecast.ok) {
-        throw new Error("City not found");
-      }
-      const actual_weather_data = await response_actual_weather.json();
-      const forecast_data = await response_forecast.json();
-      setWeather(actual_weather_data);
-      setForecast(forecast_data);
+
+      const pickClosest = (forecastData, eta) => {
+        const list = forecastData.list ?? [];
+        return list.reduce((best, entry) =>
+          Math.abs(entry.dt - eta) < Math.abs(best.dt - eta) ? entry : best, list[0]);
+      };
+
+      const mergeWithForecast = (current, entry) => ({
+        ...current,
+        main: entry.main,
+        wind: entry.wind,
+        weather: entry.weather,
+        dt: entry.dt,
+      });
+
+      setWeatherPoints([
+        { ...mergeWithForecast(currents[0], pickClosest(startForecast, plannedStart)), _eta: plannedStart },
+        { ...mergeWithForecast(currents[1], pickClosest(midForecast,   midEta)),       _eta: midEta       },
+        { ...mergeWithForecast(currents[2], pickClosest(endForecast,   endEta)),       _eta: endEta       },
+      ]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -179,65 +323,12 @@ function App() {
     }
   };
 
-  const getLocationWeather = () => {
-    setLoading(true);
-    setError(null);
-    setCity("");
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude } = position.coords;
-          const geoRes = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-          );
-          const geoData = await geoRes.json();
-          const cityName =
-            geoData.address.city ||
-            geoData.address.town ||
-            geoData.address.village ||
-            geoData.address.county;
-          if (!cityName) throw new Error("Could not determine city from location");
-          const [weatherRes, forecastRes] = await Promise.all([
-            fetch(`http://localhost:8000/weather?city=${encodeURIComponent(cityName)}`),
-            fetch(`http://localhost:8000/forecast?city=${encodeURIComponent(cityName)}`),
-          ]);
-          const weatherData = await weatherRes.json();
-          const forecastData = await forecastRes.json();
-          setWeather(weatherData);
-          setForecast(forecastData);
-        } catch (err) {
-          setError(err.message);
-        } finally {
-          setLoading(false);
-        }
-      },
-      () => {
-        setError("Location access denied");
-        setLoading(false);
-      },
-    );
-  };
-
-  function getDailyForecasts(list) {
-    const today = new Date().toISOString().slice(0, 10);
-    const byDay = {};
-    for (const entry of list) {
-      const date = entry.dt_txt.slice(0, 10);
-      if (date === today) continue;
-      if (!byDay[date]) byDay[date] = [];
-      byDay[date].push(entry);
-    }
-    return Object.entries(byDay)
-      .slice(0, 4)
-      .map(([date, entries]) => {
-        const noon = entries.reduce((prev, curr) => {
-          const prevDiff = Math.abs(parseInt(prev.dt_txt.slice(11, 13)) - 12);
-          const currDiff = Math.abs(parseInt(curr.dt_txt.slice(11, 13)) - 12);
-          return currDiff < prevDiff ? curr : prev;
-        });
-        const minTemp = Math.min(...entries.map((e) => e.main.temp));
-        return { date, minTemp, ...noon };
-      });
+  function formatEta(etaUnix, nowUnix) {
+    const diff = etaUnix - nowUnix;
+    if (diff <= 60) return "Now";
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    return h > 0 ? `+${h}h ${m}m` : `+${m}m`;
   }
 
   function getWindDirection(degrees) {
@@ -246,174 +337,313 @@ function App() {
     return directions[index];
   }
 
+  const handleGpxUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setGpxFileName(file.name);
+    setWeatherPoints(null);
+    setGpxMidPoint(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const points = parseGPX(ev.target.result);
+      setGpxPoints(points.length > 1 ? points : null);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDateTimeChange = (newDate, newTime) => {
+    setStartDate(newDate);
+    setStartTime(newTime);
+  };
+
+  const windDegrees = weatherPoints ? weatherPoints.map((w) => w.wind.deg) : null;
+
+  const routeAnalysis =
+    gpxPoints && windDegrees ? analyzeRouteWind(gpxPoints, windDegrees) : null;
+
+  const coloredSegments =
+    gpxPoints && windDegrees ? buildColoredSegments(gpxPoints, windDegrees) : null;
+
+  const avgTemp = weatherPoints
+    ? weatherPoints.reduce((s, w) => s + w.main.temp, 0) / weatherPoints.length
+    : null;
+  const avgWindSpeed = weatherPoints
+    ? weatherPoints.reduce((s, w) => s + w.wind.speed, 0) / weatherPoints.length
+    : null;
+  // Circular mean for wind direction (avoids 350°+10° = 180° bug)
+  const avgWindDeg = weatherPoints
+    ? (() => {
+        const sinSum = weatherPoints.reduce((s, w) => s + Math.sin(w.wind.deg * Math.PI / 180), 0);
+        const cosSum = weatherPoints.reduce((s, w) => s + Math.cos(w.wind.deg * Math.PI / 180), 0);
+        return ((Math.atan2(sinSum, cosSum) * 180 / Math.PI) + 360) % 360;
+      })()
+    : null;
+
+  const panelStyle = {
+    position: "fixed",
+    zIndex: 10,
+    background: "rgba(15, 15, 25, 0.75)",
+    backdropFilter: "blur(8px)",
+    borderRadius: "12px",
+    border: "1px solid rgba(255,255,255,0.12)",
+    padding: "1rem 1.2rem",
+    color: "#fff",
+    pointerEvents: "auto",
+  };
+
+  const nowUnixDisplay = weatherPoints ? weatherPoints[0]._eta : Math.floor(Date.now() / 1000);
+  const checkpoints = weatherPoints
+    ? [
+        { label: "Start",  w: weatherPoints[0] },
+        { label: "Mid",    w: weatherPoints[1] },
+        { label: "Finish", w: weatherPoints[2] },
+      ]
+    : [];
+
   return (
     <div>
-      <h1 style={{ marginBottom: "3rem" }}>Weather App</h1>
+      <WeatherMap weatherPoints={weatherPoints} gpxPoints={gpxPoints} gpxMidPoint={gpxMidPoint} coloredSegments={coloredSegments} />
 
-      <div className="search-container" ref={searchContainerRef}>
-        <div className="search-bar">
-          <input
-            type="text"
-            placeholder="Enter city..."
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                setShowSuggestions(false);
-                getWeather();
-              } else if (e.key === "Escape") {
-                setShowSuggestions(false);
-              }
-            }}
-            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-          />
-          <button onClick={() => { setShowSuggestions(false); getWeather(); }} disabled={loading}>
-            {loading ? <span className="spinner" /> : "Search"}
-          </button>
-          <button
-            className="geo-btn"
-            onClick={getLocationWeather}
-            disabled={loading}
-            title="Use my location"
-          >
-            <Icon icon="mingcute:location-fill" />
-          </button>
-        </div>
-        {showSuggestions && (
-          <ul className="suggestions">
-            {suggestions.map((s, i) => (
-              <li key={i} onMouseDown={() => selectSuggestion(s)}>
-                {getSuggestionName(s)}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      {weather && (
-        <div style={{ marginTop: "2rem" }}>
-          <h2
-            style={{
-              fontFamily: "Arial, sans-serif",
-              fontSize: "2.5rem",
-              marginBottom: "1rem",
-            }}
-          >
-            {weather.name}
-          </h2>
-          <p>
-            🕐{" "}
-            {formatTimeInZone(Math.floor(Date.now() / 1000), weather.timezone)}
-          </p>
-          <p>
-            🌅 {formatTimeInZone(weather.sys.sunrise, weather.timezone)}{" "}
-            &nbsp;|&nbsp; 🌇{" "}
-            {formatTimeInZone(weather.sys.sunset, weather.timezone)}
-          </p>
-          <p style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-            Last updated: <strong>{formatTime(weather.dt)}</strong>
-          </p>
-          <div style={{ padding: "1.5rem 0", overflow: "visible" }}>
-            <Icon
-              icon={getWeatherIcon(weather.weather[0].icon)}
-              className="weather-icon"
-              style={{ fontSize: "5rem" }}
+      {/* Top-centre: title + GPX upload */}
+      <div
+        style={{
+          ...panelStyle,
+          top: "1rem",
+          left: "50%",
+          transform: "translateX(-50%)",
+          textAlign: "center",
+          minWidth: "260px",
+        }}
+      >
+        <h1 style={{ margin: "0 0 0.75rem", fontSize: "1.5rem" }}>RideWithWind</h1>
+        {/* Date & time pickers */}
+        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.2rem" }}>
+            <span style={{ fontSize: "0.7rem", opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Start date</span>
+            <input
+              type="date"
+              value={startDate}
+              min={todayStr()}
+              max={maxDateStr()}
+              onChange={(e) => handleDateTimeChange(e.target.value, startTime)}
+              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#fff", fontSize: "0.85rem", padding: "0.3rem 0.5rem", outline: "none", colorScheme: "dark" }}
             />
           </div>
-          <h2 style={{ marginBottom: "1.5rem" }}>{weather.weather[0].main}</h2>
-          <p>
-            Temperature: <strong>{weather.main.temp.toFixed(1)}°C</strong>
-          </p>
-          <p>
-            Wind: <strong>{(weather.wind.speed * 3.6).toFixed(1)} km/h</strong>
-          </p>
-          <p>
-            Wind direction:{" "}
-            <strong>
-              {getWindDirection(weather.wind.deg)}{" "}
-              <span
-                style={{
-                  display: "inline-block",
-                  transform: `rotate(${weather.wind.deg + 180}deg)`,
-                }}
-              >
-                ↑
-              </span>
-            </strong>
-          </p>
-          <p>
-            Pressure: <strong>{weather.main.pressure} hPa</strong>
-          </p>
-          <p>
-            Humidity: <strong>{weather.main.humidity}%</strong>
-          </p>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.2rem" }}>
+            <span style={{ fontSize: "0.7rem", opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Start time</span>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => handleDateTimeChange(startDate, e.target.value)}
+              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#fff", fontSize: "0.85rem", padding: "0.3rem 0.5rem", outline: "none", colorScheme: "dark" }}
+            />
+          </div>
         </div>
-      )}
-      {forecast && (
-        <div>
-          <h3>4-Day Forecast</h3>
-          <div
-            style={{ display: "flex", gap: "1rem", justifyContent: "center" }}
-          >
-            {getDailyForecasts(forecast.list ?? []).map(
-              ({ date, minTemp, main, weather, wind }) => (
-                <div
-                  key={date}
-                  style={{ textAlign: "center", minWidth: "120px" }}
-                >
-                  <p>
-                    <strong>
-                      {new Date(date).toLocaleDateString("en-US", {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </strong>
-                  </p>
-                  <div style={{ padding: "0.75rem 0", overflow: "visible" }}>
-                    <Icon
-                      icon={getWeatherIcon(weather[0].icon.replace(/n$/, "d"))}
-                      className="weather-icon"
-                      style={{ fontSize: "3rem" }}
-                    />
-                  </div>
-                  <p>{weather[0].description}</p>
-                  <p>
-                    <strong>
-                      {main.temp.toFixed(1)}°C / {minTemp.toFixed(1)}°C
-                    </strong>
-                  </p>
-                  <p>
-                    Wind: <strong>{(wind.speed * 3.6).toFixed(1)} km/h</strong>
-                  </p>
-                  <p>
-                    Wind direction:{" "}
-                    <strong>
-                      {getWindDirection(wind.deg)}{" "}
-                      <span
-                        style={{
-                          display: "inline-block",
-                          transform: `rotate(${wind.deg + 180}deg)`,
-                        }}
-                      >
-                        ↑
-                      </span>
-                    </strong>
-                  </p>
-                  <p>
-                    Pressure: <strong>{main.pressure} hPa</strong>
-                  </p>
-                  <p>
-                    Humidity: <strong>{main.humidity}%</strong>
-                  </p>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", padding: "0.4rem 1rem", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "6px" }}>
+            <Icon icon="mingcute:file-upload-line" />
+            {gpxFileName || "Upload .gpx file"}
+            <input type="file" accept=".gpx" onChange={handleGpxUpload} style={{ display: "none" }} />
+          </label>
+          {!weatherPoints ? (
+            <button
+              disabled={!gpxPoints || loading}
+              onClick={() => fetchWeatherForRoute(gpxPoints, avgSpeed, getStartUnix())}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.4rem 1rem", borderRadius: "6px", border: "none", cursor: gpxPoints && !loading ? "pointer" : "not-allowed", fontWeight: 600, fontSize: "0.85rem", background: gpxPoints && !loading ? "#3b82f6" : "rgba(255,255,255,0.1)", color: gpxPoints && !loading ? "#fff" : "rgba(255,255,255,0.35)", transition: "background 0.15s" }}
+            >
+              <Icon icon="mingcute:check-line" />
+              Analyze route
+            </button>
+          ) : (
+            <button
+              onClick={() => fetchWeatherForRoute(gpxPoints, avgSpeed, getStartUnix())}
+              disabled={loading}
+              title="Refresh weather"
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#fff", cursor: loading ? "not-allowed" : "pointer", padding: "0.4rem 0.6rem", fontSize: "1rem", lineHeight: 1 }}
+            >
+              <Icon icon="mingcute:refresh-2-line" />
+            </button>
+          )}
+        </div>
+        {loading && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", opacity: 0.7 }}>Fetching weather and wind data</p>}
+        {error && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "#f87171" }}>{error}</p>}
+      </div>
+
+      {/* Top-left: 3-checkpoint weather panel */}
+      {weatherPoints && (
+        <div style={{ ...panelStyle, top: "1rem", left: "1rem", position: "fixed" }}>
+          {loading && (
+            <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+              <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
+            </div>
+          )}
+          <div style={{ fontSize: "0.75rem", opacity: 0.5, marginBottom: "0.6rem" }}>
+            Conditions on your {routeAnalysis ? routeAnalysis.totalKm.toFixed(1) : "—"} km route
+          </div>
+          {/* Averages row */}
+          <div style={{ display: "flex", gap: "1.2rem", marginBottom: "0.75rem", paddingBottom: "0.65rem", borderBottom: "1px solid rgba(255,255,255,0.1)", fontSize: "0.85rem" }}>
+            <div>
+              <div style={{ opacity: 0.6, fontSize: "0.75rem" }}>Avg temp</div>
+              <strong style={{ fontSize: "1.2rem" }}>{avgTemp.toFixed(1)}°C</strong>
+            </div>
+            <div>
+              <div style={{ opacity: 0.6, fontSize: "0.75rem" }}>Avg wind</div>
+              <strong style={{ fontSize: "1.2rem" }}>{(avgWindSpeed * 3.6).toFixed(1)} km/h</strong>
+            </div>
+          </div>
+          {/* Checkpoint columns */}
+          <div style={{ display: "flex", gap: "1rem" }}>
+            {checkpoints.map(({ label, w }) => (
+              <div key={label} style={{ textAlign: "center", minWidth: "80px" }}>
+                <div style={{ fontSize: "0.7rem", opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+                <div style={{ fontSize: "0.72rem", color: "#60a5fa", marginBottom: "0.2rem" }}>
+                  {label === "Start"
+                    ? (startDate === todayStr()
+                        ? startTime
+                        : `${new Date(`${startDate}T${startTime}`).toLocaleDateString([], { month: "short", day: "numeric" })} · ${startTime}`)
+                    : formatEta(w._eta, nowUnixDisplay)}
                 </div>
-              ),
-            )}
+                <Icon icon={getWeatherIcon(w.weather[0].icon)} style={{ fontSize: "2rem" }} />
+                <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{w.name}</div>
+                <div style={{ fontSize: "1rem", fontWeight: 600 }}>{w.main.temp.toFixed(1)}°C</div>
+                <div style={{ fontSize: "0.78rem", opacity: 0.8, marginTop: "0.2rem" }}>
+                  💨 {(w.wind.speed * 3.6).toFixed(1)} km/h
+                </div>
+                <div style={{ fontSize: "0.78rem", opacity: 0.8 }}>
+                  {getWindDirection(w.wind.deg)}{" "}
+                  <span style={{ display: "inline-block", transform: `rotate(${w.wind.deg + 180}deg)` }}>↑</span>
+                </div>
+                <div style={{ fontSize: "0.75rem", opacity: 0.6 }}>{w.weather[0].main}</div>
+              </div>
+            ))}
+          </div>
+          {/* Speed input */}
+          <div style={{ marginTop: "0.75rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Icon icon="mingcute:bike-line" style={{ opacity: 0.6 }} />
+            <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>Avg speed</span>
+            <input
+              type="number"
+              min="1"
+              max="100"
+              value={speedInput}
+              onChange={(e) => setSpeedInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && gpxPoints) {
+                  const parsed = parseFloat(speedInput);
+                  if (!parsed || parsed <= 0) return;
+                  setAvgSpeed(parsed);
+                  fetchWeatherForRoute(gpxPoints, parsed);
+                }
+              }}
+              style={{ width: "64px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", outline: "none", color: "#fff", fontSize: "0.9rem", textAlign: "center", padding: "0.15rem 0.2rem" }}
+            />
+            <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>km/h</span>
+            <button
+              onClick={() => {
+                const parsed = parseFloat(speedInput);
+                if (!parsed || parsed <= 0) return;
+                setAvgSpeed(parsed);
+                fetchWeatherForRoute(gpxPoints, parsed);
+              }}
+              disabled={loading}
+              title="Refresh with new speed"
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", color: "#fff", cursor: loading ? "not-allowed" : "pointer", padding: "0.2rem 0.35rem", fontSize: "0.85rem", lineHeight: 1 }}
+            >
+              <Icon icon="mingcute:refresh-2-line" />
+            </button>
           </div>
         </div>
       )}
-      <WeatherMap weather={weather} />
+
+      {/* Top-right: avg wind direction compass */}
+      {avgWindDeg !== null && (
+        <div style={{ ...panelStyle, top: "1rem", right: "1rem", textAlign: "center", minWidth: "150px", position: "fixed" }}>
+          {loading && (
+            <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+              <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
+            </div>
+          )}
+          <div style={{ fontSize: "0.72rem", opacity: 0.6, marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            Avg wind direction
+          </div>
+          <svg width="120" height="120" viewBox="0 0 120 120" style={{ display: "block", margin: "0 auto" }}>
+            <circle cx="60" cy="60" r="56" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+            {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
+              const rad = (deg - 90) * Math.PI / 180;
+              return (
+                <line
+                  key={deg}
+                  x1={60 + 49 * Math.cos(rad)} y1={60 + 49 * Math.sin(rad)}
+                  x2={60 + 55 * Math.cos(rad)} y2={60 + 55 * Math.sin(rad)}
+                  stroke="rgba(255,255,255,0.25)" strokeWidth="1"
+                />
+              );
+            })}
+            {[["N",60,13],["S",60,111],["E",109,64],["W",11,64]].map(([lbl,x,y]) => (
+              <text key={lbl} x={x} y={y} textAnchor="middle" dominantBaseline="middle"
+                fill={lbl === "N" ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.45)"}
+                fontSize="11" fontFamily="sans-serif" fontWeight={lbl === "N" ? "700" : "400"}>
+                {lbl}
+              </text>
+            ))}
+            {/* Arrow rotated so it points where wind blows TO */}
+            <g transform={`rotate(${avgWindDeg + 180}, 60, 60)`}>
+              <polygon points="60,14 54,30 60,26 66,30" fill="#60a5fa" />
+              <line x1="60" y1="26" x2="60" y2="76" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" />
+              <polygon points="60,86 54,72 66,72" fill="rgba(96,165,250,0.3)" />
+            </g>
+            <circle cx="60" cy="60" r="3.5" fill="#60a5fa" />
+          </svg>
+          <div style={{ fontWeight: 700, fontSize: "1.1rem", marginTop: "0.3rem" }}>
+            {getWindDirection(avgWindDeg)}
+          </div>
+          <div style={{ fontSize: "0.8rem", opacity: 0.65, marginTop: "0.1rem" }}>
+            {(avgWindSpeed * 3.6).toFixed(1)} km/h avg
+          </div>
+        </div>
+      )}
+
+      {/* Bottom-centre: wind analysis */}
+      {routeAnalysis && (
+        <div
+          style={{
+            ...panelStyle,
+            position: "fixed",
+            bottom: "1.5rem",
+            left: "50%",
+            transform: "translateX(-50%)",
+            minWidth: "340px",
+            textAlign: "center",
+          }}
+        >
+          {loading && (
+            <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+              <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
+            </div>
+          )}
+          <div style={{ fontSize: "0.85rem", marginBottom: "0.6rem", opacity: 0.8 }}>
+            {routeAnalysis.totalKm.toFixed(2)} km total
+          </div>
+          <div style={{ display: "flex", gap: "1.2rem", justifyContent: "center", marginBottom: "0.75rem" }}>
+            {[
+              { label: "Headwind", value: routeAnalysis.headwind, km: routeAnalysis.headwindKm, color: "#e05555" },
+              { label: "Crosswind", value: routeAnalysis.crosswind, km: routeAnalysis.crosswindKm, color: "#e0a020" },
+              { label: "Tailwind", value: routeAnalysis.tailwind, km: routeAnalysis.tailwindKm, color: "#3daa5a" },
+            ].map(({ label, value, km, color }) => (
+              <div key={label}>
+                <strong style={{ color, fontSize: "1.1rem" }}>{value.toFixed(1)}%</strong>
+                <div style={{ fontSize: "0.8rem" }}>{label}</div>
+                <div style={{ fontSize: "0.75rem", opacity: 0.7 }}>{km.toFixed(2)} km</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ height: "10px", borderRadius: "5px", overflow: "hidden", display: "flex" }}>
+            <div style={{ flex: routeAnalysis.headwind, background: "#e05555" }} />
+            <div style={{ flex: routeAnalysis.crosswind, background: "#e0a020" }} />
+            <div style={{ flex: routeAnalysis.tailwind, background: "#3daa5a" }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
