@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, ZoomControl, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, Pane, ZoomControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import "./App.css";
 import "leaflet/dist/leaflet.css";
@@ -49,26 +49,28 @@ function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments }) 
                 ))
               : <Polyline positions={polyline} pathOptions={{ color: "#555566", weight: 4 }} />
             }
-            <CircleMarker
-              center={polyline[0]}
-              radius={7}
-              pathOptions={{ color: "#fff", weight: 2, fillColor: "#22c55e", fillOpacity: 1 }}
-            />
-            {gpxMidPoint && (
+            <Pane name="route-points" style={{ zIndex: 450 }}>
               <CircleMarker
-                center={[gpxMidPoint.lat, gpxMidPoint.lon]}
+                center={polyline[0]}
                 radius={7}
-                pathOptions={{ color: "#fff", weight: 2, fillColor: "#eab308", fillOpacity: 1 }}
+                pathOptions={{ color: "#fff", weight: 2, fillColor: "#22c55e", fillOpacity: 1 }}
               />
-            )}
-            <Marker
-              position={polyline[polyline.length - 1]}
-              icon={L.divIcon({
-                className: "",
-                html: '<span style="font-size:1rem;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5))">🏁</span>',
-                iconAnchor: [12, 24],
-              })}
-            />
+              {gpxMidPoint && (
+                <CircleMarker
+                  center={[gpxMidPoint.lat, gpxMidPoint.lon]}
+                  radius={7}
+                  pathOptions={{ color: "#fff", weight: 2, fillColor: "#eab308", fillOpacity: 1 }}
+                />
+              )}
+              <Marker
+                position={polyline[polyline.length - 1]}
+                icon={L.divIcon({
+                  className: "",
+                  html: '<span style="font-size:1rem;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5))">🏁</span>',
+                  iconAnchor: [12, 24],
+                })}
+              />
+            </Pane>
           </>
         )}
       </MapContainer>
@@ -197,8 +199,11 @@ function App() {
     const file = e.target.files[0];
     if (!file) return;
     setGpxFileName(file.name);
+    setGpxPoints(null);
     setWeatherPoints(null);
     setGpxMidPoint(null);
+    setRouteAnalysis(null);
+    setColoredSegments(null);
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const points = await parseGPX(ev.target.result);
