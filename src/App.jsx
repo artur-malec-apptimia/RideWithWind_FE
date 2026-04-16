@@ -243,11 +243,6 @@ function nowTimeStr() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
-function maxDateStr() {
-  const d = new Date();
-  d.setDate(d.getDate() + 3);
-  return d.toISOString().split("T")[0];
-}
 
 function App() {
   const [weatherPoints, setWeatherPoints] = useState(null); // [start, mid, end]
@@ -392,27 +387,43 @@ function App() {
       >
         <h1 style={{ margin: "0 0 0.75rem", fontSize: "1.5rem" }}>RideWithWind</h1>
         {/* Date & time pickers */}
-        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.2rem" }}>
-            <span style={{ fontSize: "0.7rem", opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Start date</span>
-            <input
-              type="date"
-              value={startDate}
-              min={todayStr()}
-              max={maxDateStr()}
-              onChange={(e) => handleDateTimeChange(e.target.value, startTime)}
-              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#fff", fontSize: "0.85rem", padding: "0.3rem 0.5rem", outline: "none", colorScheme: "dark" }}
-            />
+        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", marginBottom: "0.75rem", alignItems: "stretch" }}>
+          <div style={{ display: "flex", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "8px", overflow: "hidden" }}>
+            {[0, 1, 2, 3].map((offset) => {
+              const d = new Date();
+              d.setDate(d.getDate() + offset);
+              const dayStr = d.toISOString().split("T")[0];
+              const isSelected = startDate === dayStr;
+              const label = offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : d.toLocaleDateString([], { weekday: "short", day: "numeric" });
+              return (
+                <button
+                  key={offset}
+                  onClick={() => handleDateTimeChange(dayStr, startTime)}
+                  style={{
+                    padding: "0",
+                    minWidth: "5.2rem",
+                    border: "none",
+                    borderRight: offset < 3 ? "1px solid rgba(255,255,255,0.18)" : "none",
+                    background: isSelected ? "rgba(255,255,255,0.18)" : "transparent",
+                    color: isSelected ? "#fff" : "rgba(255,255,255,0.5)",
+                    fontSize: "0.8rem",
+                    cursor: "pointer",
+                    fontWeight: isSelected ? 600 : 400,
+                    whiteSpace: "nowrap",
+                    transition: "background 0.15s, color 0.15s",
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.2rem" }}>
-            <span style={{ fontSize: "0.7rem", opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Start time</span>
-            <input
-              type="time"
-              value={startTime}
-              onChange={(e) => handleDateTimeChange(startDate, e.target.value)}
-              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#fff", fontSize: "0.85rem", padding: "0.3rem 0.5rem", outline: "none", colorScheme: "dark" }}
-            />
-          </div>
+          <input
+            type="time"
+            value={startTime}
+            onChange={(e) => handleDateTimeChange(startDate, e.target.value)}
+            style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "8px", color: "#fff", fontSize: "0.8rem", padding: "0.3rem 0.5rem", outline: "none", colorScheme: "dark" }}
+          />
         </div>
         <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
           <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", padding: "0.4rem 1rem", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "6px" }}>
@@ -445,11 +456,11 @@ function App() {
       </div>
 
       {/* Left column: weather + wind + elevation */}
-      {weatherPoints && (
-        <div style={{ position: "fixed", left: "1rem", top: "1rem", bottom: "1rem", zIndex: 10, display: "flex", flexDirection: "column", justifyContent: "space-between", pointerEvents: "none", gap: "1rem" }}>
+      {(weatherPoints || (gpxPoints && gpxPoints.some(p => p.ele != null))) && (
+        <div style={{ position: "fixed", left: "1rem", top: "1rem", bottom: "1rem", zIndex: 10, display: "flex", flexDirection: "column", justifyContent: "flex-start", pointerEvents: "none", gap: "1rem" }}>
 
         {/* Weather panel */}
-        <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto" }}>
+        {weatherPoints && <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto" }}>
           {loading && (
             <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
               <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
@@ -530,7 +541,7 @@ function App() {
               <Icon icon="mingcute:refresh-2-line" />
             </button>
           </div>
-        </div>
+        </div>}
 
         {/* Wind analysis panel */}
         {routeAnalysis && (
@@ -566,7 +577,7 @@ function App() {
 
         {/* Elevation panel */}
         {gpxPoints && gpxPoints.some(p => p.ele != null) && (
-          <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto" }}>
+          <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto", marginTop: "auto" }}>
             <div style={{ fontSize: "0.72rem", opacity: 0.5, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
             <ElevationChart points={gpxPoints} coloredSegments={coloredSegments} />
           </div>
