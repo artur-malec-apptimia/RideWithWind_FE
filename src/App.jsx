@@ -5,6 +5,7 @@ import "./App.css";
 import "leaflet/dist/leaflet.css";
 import { Icon } from "@iconify/react";
 import cyclistBg from "./assets/CyclistBackground.jpg";
+import riderIcon from "./assets/RiderIcon.png";
 
 function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   const map = useMap();
@@ -18,7 +19,7 @@ function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   return null;
 }
 
-function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments }) {
+function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments, hoveredPoint }) {
   const startWeather = weatherPoints?.[0];
   const lat = startWeather?.coord.lat ?? 20;
   const lon = startWeather?.coord.lon ?? 0;
@@ -74,6 +75,17 @@ function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments }) 
             </Pane>
           </>
         )}
+        {hoveredPoint && (
+          <Marker
+            center={[hoveredPoint.lat, hoveredPoint.lon]}
+            position={[hoveredPoint.lat, hoveredPoint.lon]}
+            icon={L.divIcon({
+              className: "",
+              html: `<div style="width:30px;height:30px;border-radius:50%;background:#60a5fa;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.4)"><img src="${riderIcon}" style="width:28px;height:28px;object-fit:contain" /></div>`,
+              iconAnchor: [20, 20],
+            })}
+          />
+        )}
       </MapContainer>
     </div>
   );
@@ -113,7 +125,9 @@ function getWeatherIcon(iconCode) {
   return icons[iconCode] || "meteocons:not-available-fill";
 }
 
-function ElevationChart({ points, coloredSegments }) {
+function ElevationChart({ points, coloredSegments, onHover }) {
+  const [hoverSi, setHoverSi] = useState(null);
+
   const eles = points.map(p => p.ele).filter(e => e != null);
   if (eles.length < 2) return <div style={{ fontSize: "0.75rem", opacity: 0.5 }}>No elevation data</div>;
 
@@ -175,6 +189,19 @@ function ElevationChart({ points, coloredSegments }) {
     }
   }
 
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (W / rect.width);
+    const si = Math.max(0, Math.min(sampled.length - 1, Math.round(((x - PL) / iW) * (sampled.length - 1))));
+    setHoverSi(si);
+    onHover?.(points[sampledIndices[si]]);
+  };
+
+  const handleMouseLeave = () => {
+    setHoverSi(null);
+    onHover?.(null);
+  };
+
   return (
     <div>
       <div style={{ display: "flex", gap: "1rem", marginBottom: "0.4rem", fontSize: "0.8rem" }}>
@@ -182,7 +209,10 @@ function ElevationChart({ points, coloredSegments }) {
         <span style={{ color: "#f87171" }}>↓ {Math.round(loss)} m</span>
         <span style={{ opacity: 0.5 }}>{Math.round(minE)}–{Math.round(maxE)} m</span>
       </div>
-      <svg width={W} height={H} style={{ display: "block" }}>
+      <svg width={W} height={H} style={{ display: "block", cursor: "crosshair" }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
         <defs>
           {colorGroups
             ? colorGroups.map((g, gi) => (
@@ -222,6 +252,20 @@ function ElevationChart({ points, coloredSegments }) {
         <text x={PL - 3} y={PT + iH + 1} textAnchor="end" fill="rgba(255,255,255,0.45)" fontSize="9">{Math.round(minE)}</text>
         <text x={PL} y={H} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9">Start</text>
         <text x={PL + iW} y={H} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9">End</text>
+        {hoverSi !== null && (() => {
+          const hx = toX(hoverSi);
+          const hy = toY(sampled[hoverSi]);
+          const labelAnchor = hoverSi > sampled.length * 0.8 ? "end" : "middle";
+          return (
+            <>
+              <line x1={hx} y1={PT} x2={hx} y2={PT + iH} stroke="rgba(255,255,255,0.35)" strokeWidth="1" strokeDasharray="2,2" />
+              <circle cx={hx} cy={hy} r="3" fill="#fff" stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
+              <text x={hx} y={Math.max(PT + 9, hy - 5)} textAnchor={labelAnchor} fill="#fff" fontSize="9" fontWeight="600">
+                {Math.round(sampled[hoverSi])}m
+              </text>
+            </>
+          );
+        })()}
       </svg>
     </div>
   );
@@ -257,6 +301,7 @@ function App() {
   const [startTime, setStartTime] = useState(nowTimeStr);
   const [routeAnalysis, setRouteAnalysis] = useState(null);
   const [coloredSegments, setColoredSegments] = useState(null);
+  const [hoveredPoint, setHoveredPoint] = useState(null);
 
   const getStartUnix = (date = startDate, time = startTime) =>
     Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
@@ -366,7 +411,7 @@ function App() {
   return (
     <div>
       {gpxPoints ? (
-        <WeatherMap weatherPoints={weatherPoints} gpxPoints={gpxPoints} gpxMidPoint={gpxMidPoint} coloredSegments={coloredSegments} />
+        <WeatherMap weatherPoints={weatherPoints} gpxPoints={gpxPoints} gpxMidPoint={gpxMidPoint} coloredSegments={coloredSegments} hoveredPoint={hoveredPoint} />
       ) : (
         <div style={{ position: "fixed", inset: 0, zIndex: 0 }}>
           <img src={cyclistBg} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
@@ -401,7 +446,7 @@ function App() {
                   onClick={() => handleDateTimeChange(dayStr, startTime)}
                   style={{
                     padding: "0",
-                    minWidth: "5.2rem",
+                    minWidth: "5.1rem",
                     border: "none",
                     borderRight: offset < 3 ? "1px solid rgba(255,255,255,0.18)" : "none",
                     background: isSelected ? "rgba(255,255,255,0.18)" : "transparent",
@@ -579,7 +624,7 @@ function App() {
         {gpxPoints && gpxPoints.some(p => p.ele != null) && (
           <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto", marginTop: "auto" }}>
             <div style={{ fontSize: "0.72rem", opacity: 0.5, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
-            <ElevationChart points={gpxPoints} coloredSegments={coloredSegments} />
+            <ElevationChart points={gpxPoints} coloredSegments={coloredSegments} onHover={setHoveredPoint} />
           </div>
         )}
 
