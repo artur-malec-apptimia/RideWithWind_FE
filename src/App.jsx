@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 import { Icon } from "@iconify/react";
 import cyclistBg from "./assets/CyclistBackground.jpg";
 import riderIcon from "./assets/RiderIcon.png";
+import cyclistAbove from "./assets/CyclistAbove.png";
 
 function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   const map = useMap();
@@ -400,6 +401,48 @@ function App() {
   };
 
   const nowUnixDisplay = weatherPoints ? weatherPoints[0]._eta : Math.floor(Date.now() / 1000);
+
+  function windAngleBgColor(angle, opacity = 0.2) {
+    const a = ((angle % 360) + 360) % 360;
+    const stops = [
+      { deg: 0,   r: 224, g: 85,  b: 85  }, // red   – headwind
+      { deg: 90,  r: 224, g: 160, b: 32  }, // yellow – right crosswind
+      { deg: 180, r: 61,  g: 170, b: 90  }, // green  – tailwind
+      { deg: 270, r: 224, g: 160, b: 32  }, // yellow – left crosswind
+      { deg: 360, r: 224, g: 85,  b: 85  }, // red again
+    ];
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (a >= stops[i].deg && a < stops[i + 1].deg) {
+        const t = (a - stops[i].deg) / (stops[i + 1].deg - stops[i].deg);
+        const r = Math.round(stops[i].r + t * (stops[i + 1].r - stops[i].r));
+        const g = Math.round(stops[i].g + t * (stops[i + 1].g - stops[i].g));
+        const b = Math.round(stops[i].b + t * (stops[i + 1].b - stops[i].b));
+        return `rgba(${r},${g},${b},${opacity})`;
+      }
+    }
+    return `rgba(224,85,85,${opacity})`;
+  }
+
+  // Relative wind angle for hovered elevation point
+  let relativeWindAngle = null;
+  let relativeWindLabel = null;
+  if (hoveredPoint && gpxPoints && weatherPoints) {
+    const idx = gpxPoints.findIndex(p => p.lat === hoveredPoint.lat && p.lon === hoveredPoint.lon);
+    if (idx >= 0) {
+      const prev = gpxPoints[Math.max(0, idx - 1)];
+      const next = gpxPoints[Math.min(gpxPoints.length - 1, idx + 1)];
+      const riderBearing = (Math.atan2(next.lon - prev.lon, next.lat - prev.lat) * 180 / Math.PI + 360) % 360;
+      const t = idx / (gpxPoints.length - 1);
+      const wpIdx = t < 0.33 ? 0 : t < 0.66 ? 1 : 2;
+      const windDeg = weatherPoints[wpIdx].wind.deg;
+      relativeWindAngle = (windDeg - riderBearing + 360) % 360;
+      const a = relativeWindAngle;
+      relativeWindLabel = a < 45 || a >= 315 ? "Headwind"
+                        : a < 135 ? "Right crosswind"
+                        : a < 225 ? "Tailwind"
+                        : "Left crosswind";
+    }
+  }
   const checkpoints = weatherPoints
     ? [
         { label: "Start",  w: weatherPoints[0] },
@@ -631,47 +674,65 @@ function App() {
         </div>
       )}
 
-      {/* Top-right: avg wind direction compass */}
+      {/* Top-right: wind direction compass */}
       {avgWindDeg !== null && (
-        <div style={{ ...panelStyle, top: "1rem", right: "1rem", textAlign: "center", minWidth: "150px", position: "fixed" }}>
+        <div style={{ ...panelStyle, top: "1rem", right: "1rem", textAlign: "center", minWidth: "180px", position: "fixed" }}>
           {loading && (
             <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
               <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
             </div>
           )}
           <div style={{ fontSize: "0.72rem", opacity: 0.6, marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            Avg wind direction
+            {relativeWindAngle !== null ? "Wind vs rider" : "Avg wind direction"}
           </div>
-          <svg width="120" height="120" viewBox="0 0 120 120" style={{ display: "block", margin: "0 auto" }}>
-            <circle cx="60" cy="60" r="56" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+          <svg width="150" height="150" viewBox="0 0 120 120" style={{ display: "block", margin: "0 auto" }}>
+            <defs>
+              <clipPath id="cyclist-above-clip">
+                <circle cx="60" cy="60" r="36" />
+              </clipPath>
+            </defs>
+            <circle cx="60" cy="60" r="56" stroke="rgba(255,255,255,0.12)" strokeWidth="1"
+              fill={relativeWindAngle !== null ? windAngleBgColor(relativeWindAngle) : "rgba(255,255,255,0.04)"}
+            />
             {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
               const rad = (deg - 90) * Math.PI / 180;
               return (
-                <line
-                  key={deg}
+                <line key={deg}
                   x1={60 + 49 * Math.cos(rad)} y1={60 + 49 * Math.sin(rad)}
                   x2={60 + 55 * Math.cos(rad)} y2={60 + 55 * Math.sin(rad)}
                   stroke="rgba(255,255,255,0.25)" strokeWidth="1"
                 />
               );
             })}
-            {[["N",60,13],["S",60,111],["E",109,64],["W",11,64]].map(([lbl,x,y]) => (
-              <text key={lbl} x={x} y={y} textAnchor="middle" dominantBaseline="middle"
-                fill={lbl === "N" ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.45)"}
-                fontSize="11" fontFamily="sans-serif" fontWeight={lbl === "N" ? "700" : "400"}>
-                {lbl}
-              </text>
-            ))}
-            {/* Arrow rotated so it points where wind blows TO */}
-            <g transform={`rotate(${avgWindDeg + 180}, 60, 60)`}>
-              <polygon points="60,14 54,30 60,26 66,30" fill="#60a5fa" />
-              <line x1="60" y1="26" x2="60" y2="76" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" />
-              <polygon points="60,86 54,72 66,72" fill="rgba(96,165,250,0.3)" />
-            </g>
-            <circle cx="60" cy="60" r="3.5" fill="#60a5fa" />
+            {relativeWindAngle !== null ? (
+              /* Relative mode: inward arrow + cyclist icon */
+              <>
+                <g transform={`rotate(${relativeWindAngle}, 60, 60)`}>
+                  <polygon points="60,20 53,5 67,5" fill={windAngleBgColor(relativeWindAngle, 1)} />
+                </g>
+                <image href={cyclistAbove} x="24" y="24" width="72" height="72" clipPath="url(#cyclist-above-clip)" />
+              </>
+            ) : (
+              /* Absolute mode: N/S/E/W + outward arrow */
+              <>
+                {[["N",60,13],["S",60,111],["E",109,64],["W",11,64]].map(([lbl,x,y]) => (
+                  <text key={lbl} x={x} y={y} textAnchor="middle" dominantBaseline="middle"
+                    fill={lbl === "N" ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.45)"}
+                    fontSize="11" fontFamily="sans-serif" fontWeight={lbl === "N" ? "700" : "400"}>
+                    {lbl}
+                  </text>
+                ))}
+                <g transform={`rotate(${avgWindDeg + 180}, 60, 60)`}>
+                  <polygon points="60,14 54,30 60,26 66,30" fill="#60a5fa" />
+                  <line x1="60" y1="26" x2="60" y2="76" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" />
+                  <polygon points="60,86 54,72 66,72" fill="rgba(96,165,250,0.3)" />
+                </g>
+                <circle cx="60" cy="60" r="3.5" fill="#60a5fa" />
+              </>
+            )}
           </svg>
           <div style={{ fontWeight: 700, fontSize: "1.1rem", marginTop: "0.3rem" }}>
-            {getWindDirection(avgWindDeg)}
+            {relativeWindAngle !== null ? relativeWindLabel : getWindDirection(avgWindDeg)}
           </div>
           <div style={{ fontSize: "0.8rem", opacity: 0.65, marginTop: "0.1rem" }}>
             {(avgWindSpeed * 3.6).toFixed(1)} km/h avg
