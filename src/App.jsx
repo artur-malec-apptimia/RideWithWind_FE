@@ -113,12 +113,16 @@ function getWeatherIcon(iconCode) {
   return icons[iconCode] || "meteocons:not-available-fill";
 }
 
-function ElevationChart({ points }) {
+function ElevationChart({ points, coloredSegments }) {
   const eles = points.map(p => p.ele).filter(e => e != null);
   if (eles.length < 2) return <div style={{ fontSize: "0.75rem", opacity: 0.5 }}>No elevation data</div>;
 
   const step = Math.max(1, Math.floor(points.length / 400));
-  const sampled = points.filter((_, i) => i % step === 0 || i === points.length - 1).map(p => p.ele ?? 0);
+  const sampledIndices = [];
+  for (let i = 0; i < points.length; i++) {
+    if (i % step === 0 || i === points.length - 1) sampledIndices.push(i);
+  }
+  const sampled = sampledIndices.map(i => points[i].ele ?? 0);
 
   const minE = Math.min(...sampled);
   const maxE = Math.max(...sampled);
@@ -128,16 +132,47 @@ function ElevationChart({ points }) {
   const PL = 36, PR = 8, PT = 6, PB = 16;
   const iW = W - PL - PR, iH = H - PT - PB;
 
-  const toX = (i) => PL + (i / (sampled.length - 1)) * iW;
+  const toX = (si) => PL + (si / (sampled.length - 1)) * iW;
   const toY = (e) => PT + iH - ((e - minE) / range) * iH;
 
-  const pts = sampled.map((e, i) => `${toX(i).toFixed(1)},${toY(e).toFixed(1)}`).join(" L ");
-  const area = `M ${pts} L ${toX(sampled.length - 1).toFixed(1)},${(PT + iH).toFixed(1)} L ${toX(0).toFixed(1)},${(PT + iH).toFixed(1)} Z`;
+  const baseLinePts = sampled.map((e, si) => `${toX(si).toFixed(1)},${toY(e).toFixed(1)}`).join(" L ");
+  const area = `M ${baseLinePts} L ${toX(sampled.length - 1).toFixed(1)},${(PT + iH).toFixed(1)} L ${toX(0).toFixed(1)},${(PT + iH).toFixed(1)} Z`;
 
   let gain = 0, loss = 0;
   for (let i = 1; i < eles.length; i++) {
     const d = eles[i] - eles[i - 1];
     if (d > 0) gain += d; else loss += Math.abs(d);
+  }
+
+  // Map each sampled point to a wind color from coloredSegments
+  let colorGroups = null;
+  if (coloredSegments && coloredSegments.length > 0) {
+    const posToIdx = new Map();
+    points.forEach((p, i) => posToIdx.set(`${p.lat},${p.lon}`, i));
+
+    const segRanges = coloredSegments.map(seg => ({
+      start: posToIdx.get(`${seg.positions[0][0]},${seg.positions[0][1]}`),
+      end: posToIdx.get(`${seg.positions[seg.positions.length - 1][0]},${seg.positions[seg.positions.length - 1][1]}`),
+      color: seg.color,
+    })).filter(s => s.start != null && s.end != null);
+
+    const getColor = (origIdx) => {
+      const seg = segRanges.find(s => origIdx >= s.start && origIdx <= s.end);
+      return seg ? seg.color : "#60a5fa";
+    };
+
+    const perPoint = sampledIndices.map(origIdx => getColor(origIdx));
+
+    // Group consecutive same-color sampled points
+    colorGroups = [];
+    let i = 0;
+    while (i < sampled.length) {
+      const color = perPoint[i];
+      const startSi = i;
+      while (i < sampled.length && perPoint[i] === color) i++;
+      const endSi = Math.min(i, sampled.length - 1); // overlap by 1 for continuity
+      colorGroups.push({ color, startSi, endSi });
+    }
   }
 
   return (
@@ -149,15 +184,40 @@ function ElevationChart({ points }) {
       </div>
       <svg width={W} height={H} style={{ display: "block" }}>
         <defs>
-          <linearGradient id="ele-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.45" />
-            <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.03" />
-          </linearGradient>
+          {colorGroups
+            ? colorGroups.map((g, gi) => (
+                <clipPath key={gi} id={`ele-clip-${gi}`}>
+                  <rect x={toX(g.startSi)} y={PT} width={toX(g.endSi) - toX(g.startSi) + 1} height={iH + 1} />
+                </clipPath>
+              ))
+            : (
+              <linearGradient id="ele-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.45" />
+                <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.03" />
+              </linearGradient>
+            )
+          }
         </defs>
         <line x1={PL} y1={PT} x2={PL} y2={PT + iH} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
         <line x1={PL} y1={PT + iH} x2={PL + iW} y2={PT + iH} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-        <path d={area} fill="url(#ele-fill)" />
-        <path d={`M ${pts}`} fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinejoin="round" />
+        {colorGroups ? (
+          colorGroups.map((g, gi) => {
+            const pathPts = sampled
+              .slice(g.startSi, g.endSi + 1)
+              .map((e, j) => `${toX(g.startSi + j).toFixed(1)},${toY(e).toFixed(1)}`);
+            return (
+              <g key={gi}>
+                <path d={area} fill={g.color} fillOpacity="0.15" clipPath={`url(#ele-clip-${gi})`} />
+                <path d={`M ${pathPts.join(" L ")}`} fill="none" stroke={g.color} strokeWidth="1.5" strokeLinejoin="round" />
+              </g>
+            );
+          })
+        ) : (
+          <>
+            <path d={area} fill="url(#ele-fill)" />
+            <path d={`M ${baseLinePts}`} fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinejoin="round" />
+          </>
+        )}
         <text x={PL - 3} y={PT + 4} textAnchor="end" fill="rgba(255,255,255,0.45)" fontSize="9">{Math.round(maxE)}</text>
         <text x={PL - 3} y={PT + iH + 1} textAnchor="end" fill="rgba(255,255,255,0.45)" fontSize="9">{Math.round(minE)}</text>
         <text x={PL} y={H} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9">Start</text>
@@ -508,7 +568,7 @@ function App() {
         {gpxPoints && gpxPoints.some(p => p.ele != null) && (
           <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto" }}>
             <div style={{ fontSize: "0.72rem", opacity: 0.5, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
-            <ElevationChart points={gpxPoints} />
+            <ElevationChart points={gpxPoints} coloredSegments={coloredSegments} />
           </div>
         )}
 
