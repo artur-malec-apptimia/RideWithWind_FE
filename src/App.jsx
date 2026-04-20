@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import "./App.css";
 import cyclistBg from "./assets/CyclistBackground.jpg";
@@ -6,7 +6,8 @@ import WeatherMap from "./components/WeatherMap";
 import ElevationChart from "./components/ElevationChart";
 import WindCompass from "./components/WindCompass";
 import WeatherPanel from "./components/WeatherPanel";
-import { parseGPX, fetchRouteWeather, fetchWindAnalysis, fetchColoredSegments } from "./api";
+import StravaRoutes from "./components/StravaRoutes";
+import { parseGPX, fetchRouteWeather, fetchWindAnalysis, fetchColoredSegments, fetchStravaStatus, disconnectStrava } from "./api";
 import { todayStr, nowTimeStr } from "./utils/weather";
 import { panelStyle } from "./styles";
 
@@ -24,6 +25,12 @@ function App() {
   const [routeAnalysis, setRouteAnalysis] = useState(null);
   const [coloredSegments, setColoredSegments] = useState(null);
   const [hoveredPoint, setHoveredPoint] = useState(null);
+  const [stravaConnected, setStravaConnected] = useState(false);
+  const [showStravaRoutes, setShowStravaRoutes] = useState(false);
+
+  useEffect(() => {
+    fetchStravaStatus().then(({ connected }) => setStravaConnected(connected));
+  }, []);
 
   const getStartUnix = (date = startDate, time = startTime) =>
     Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
@@ -50,11 +57,25 @@ function App() {
     }
   };
 
+  const handleStravaRouteSelect = (points, routeName) => {
+    setShowStravaRoutes(false); // only called after successful points fetch
+    setGpxFileName(routeName);
+    setGpxPoints(points.length > 1 ? points : null);
+    setWeatherPoints(null);
+    setGpxMidPoint(null);
+    setRouteAnalysis(null);
+    setColoredSegments(null);
+  };
+
+  const handleDisconnectStrava = async () => {
+    await disconnectStrava();
+    setStravaConnected(false);
+  };
+
   const handleGpxUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setGpxFileName(file.name);
-    setGpxPoints(null);
     setWeatherPoints(null);
     setGpxMidPoint(null);
     setRouteAnalysis(null);
@@ -186,17 +207,34 @@ function App() {
             style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "8px", color: "#fff", fontSize: "0.8rem", padding: "0.3rem 0.5rem", outline: "none", colorScheme: "dark" }}
           />
         </div>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", padding: "0.4rem 1rem", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "6px" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", padding: "0 1rem", height: "34px", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "6px", fontSize: "0.85rem" }}>
             <Icon icon="mingcute:file-upload-line" />
             {gpxFileName || "Upload .gpx file"}
             <input type="file" accept=".gpx" onChange={handleGpxUpload} style={{ display: "none" }} />
           </label>
+          {stravaConnected ? (
+            <button
+              onClick={() => setShowStravaRoutes(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0 1rem", height: "34px", border: "1px solid rgba(252,76,2,0.6)", borderRadius: "6px", background: "rgba(252,76,2,0.12)", color: "#fc4c02", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}
+            >
+              <Icon icon="simple-icons:strava" />
+              Strava routes
+            </button>
+          ) : (
+            <a
+              href="http://localhost:8000/strava/auth"
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0 1rem", height: "34px", border: "1px solid rgba(252,76,2,0.6)", borderRadius: "6px", background: "rgba(252,76,2,0.12)", color: "#fc4c02", textDecoration: "none", fontSize: "0.85rem", fontWeight: 600 }}
+            >
+              <Icon icon="simple-icons:strava" />
+              Connect Strava
+            </a>
+          )}
           {!weatherPoints ? (
             <button
               disabled={!gpxPoints || loading}
               onClick={() => handleFetchWeather(gpxPoints, avgSpeed, getStartUnix())}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.4rem 1rem", borderRadius: "6px", border: "none", cursor: gpxPoints && !loading ? "pointer" : "not-allowed", fontWeight: 600, fontSize: "0.85rem", background: gpxPoints && !loading ? "#3b82f6" : "rgba(255,255,255,0.1)", color: gpxPoints && !loading ? "#fff" : "rgba(255,255,255,0.35)", transition: "background 0.15s" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0 1rem", height: "34px", borderRadius: "6px", border: "none", cursor: gpxPoints && !loading ? "pointer" : "not-allowed", fontWeight: 600, fontSize: "0.85rem", background: gpxPoints && !loading ? "#3b82f6" : "rgba(255,255,255,0.1)", color: gpxPoints && !loading ? "#fff" : "rgba(255,255,255,0.35)", transition: "background 0.15s" }}
             >
               <Icon icon="mingcute:check-line" />
               Analyze route
@@ -212,6 +250,13 @@ function App() {
             </button>
           )}
         </div>
+        {stravaConnected && (
+          <div style={{ marginTop: "0.5rem" }}>
+            <button onClick={handleDisconnectStrava} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", fontSize: "0.72rem", cursor: "pointer", textDecoration: "underline" }}>
+              Disconnect Strava
+            </button>
+          </div>
+        )}
         {loading && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", opacity: 0.7 }}>Fetching weather and wind data</p>}
         {error && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "#f87171" }}>{error}</p>}
       </div>
@@ -291,6 +336,13 @@ function App() {
           relativeWindAngle={relativeWindAngle}
           relativeWindLabel={relativeWindLabel}
           loading={loading}
+        />
+      )}
+
+      {showStravaRoutes && (
+        <StravaRoutes
+          onSelectRoute={handleStravaRouteSelect}
+          onClose={() => setShowStravaRoutes(false)}
         />
       )}
     </div>

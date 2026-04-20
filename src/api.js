@@ -36,3 +36,14 @@ export async function fetchColoredSegments(points, windDegrees) {
   });
   return res.json();
 }
+
+// ── Strava ────────────────────────────────────────────────────────────────────
+
+export async function fetchStravaStatus() {
+  const res = await fetch(`${BASE}/strava/status`);
+  return res.json(); // { connected: bool }
+}
+
+export async function disconnectStrava() {
+  await fetch(`${BASE}/strava/disconnect`, { method: "POST" });
+}

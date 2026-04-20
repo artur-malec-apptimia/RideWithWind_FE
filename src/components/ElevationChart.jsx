@@ -47,19 +47,16 @@ export default function ElevationChart({ points, coloredSegments, onHover }) {
   // Map each sampled point to a wind color from coloredSegments
   let colorGroups = null;
   if (coloredSegments && coloredSegments.length > 0) {
-    const posToIdx = new Map();
-    points.forEach((p, i) => posToIdx.set(`${p.lat},${p.lon}`, i));
-
+    // Use startIdx/endIdx directly — avoids float-to-string precision bugs
     const segRanges = coloredSegments.map(seg => ({
-      start: posToIdx.get(`${seg.positions[0][0]},${seg.positions[0][1]}`),
-      end: posToIdx.get(`${seg.positions[seg.positions.length - 1][0]},${seg.positions[seg.positions.length - 1][1]}`),
+      start: seg.startIdx,
+      end: seg.endIdx,
       color: seg.color,
-    })).filter(s => s.start != null && s.end != null);
+    }));
 
     const getColor = (origIdx) => {
       const seg = segRanges.find(s => origIdx >= s.start && origIdx <= s.end);
       if (seg) return seg.color;
-      if (segRanges.length === 0) return "#60a5fa";
       if (origIdx < segRanges[0].start) return segRanges[0].color;
       return segRanges[segRanges.length - 1].color;
     };
