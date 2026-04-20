@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, Pane, ZoomControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import "./App.css";
@@ -128,6 +128,17 @@ function getWeatherIcon(iconCode) {
 
 function ElevationChart({ points, coloredSegments, onHover }) {
   const [hoverSi, setHoverSi] = useState(null);
+  const [width, setWidth] = useState(300);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      setWidth(entries[0].contentRect.width || 300);
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   const eles = points.map(p => p.ele).filter(e => e != null);
   if (eles.length < 2) return <div style={{ fontSize: "0.75rem", opacity: 0.5 }}>No elevation data</div>;
@@ -143,7 +154,7 @@ function ElevationChart({ points, coloredSegments, onHover }) {
   const maxE = Math.max(...sampled);
   const range = maxE - minE || 1;
 
-  const W = 300, H = 70;
+  const W = width, H = 70;
   const PL = 36, PR = 8, PT = 6, PB = 16;
   const iW = W - PL - PR, iH = H - PT - PB;
 
@@ -173,7 +184,11 @@ function ElevationChart({ points, coloredSegments, onHover }) {
 
     const getColor = (origIdx) => {
       const seg = segRanges.find(s => origIdx >= s.start && origIdx <= s.end);
-      return seg ? seg.color : "#60a5fa";
+      if (seg) return seg.color;
+      // clamp to nearest segment rather than falling back to blue
+      if (segRanges.length === 0) return "#60a5fa";
+      if (origIdx < segRanges[0].start) return segRanges[0].color;
+      return segRanges[segRanges.length - 1].color;
     };
 
     const perPoint = sampledIndices.map(origIdx => getColor(origIdx));
@@ -204,13 +219,13 @@ function ElevationChart({ points, coloredSegments, onHover }) {
   };
 
   return (
-    <div>
+    <div ref={containerRef}>
       <div style={{ display: "flex", gap: "1rem", marginBottom: "0.4rem", fontSize: "0.8rem" }}>
         <span style={{ color: "#4ade80" }}>↑ {Math.round(gain)} m</span>
         <span style={{ color: "#f87171" }}>↓ {Math.round(loss)} m</span>
         <span style={{ opacity: 0.5 }}>{Math.round(minE)}–{Math.round(maxE)} m</span>
       </div>
-      <svg width={W} height={H} style={{ display: "block", cursor: "crosshair" }}
+      <svg width={W} height={H} style={{ display: "block", width: "100%", cursor: "crosshair" }}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
       >
@@ -402,14 +417,14 @@ function App() {
 
   const nowUnixDisplay = weatherPoints ? weatherPoints[0]._eta : Math.floor(Date.now() / 1000);
 
-  function windAngleBgColor(angle, opacity = 0.2) {
+  function windAngleBgColor(angle, opacity = 0.38) {
     const a = ((angle % 360) + 360) % 360;
     const stops = [
-      { deg: 0,   r: 224, g: 85,  b: 85  }, // red   – headwind
-      { deg: 90,  r: 224, g: 160, b: 32  }, // yellow – right crosswind
-      { deg: 180, r: 61,  g: 170, b: 90  }, // green  – tailwind
-      { deg: 270, r: 224, g: 160, b: 32  }, // yellow – left crosswind
-      { deg: 360, r: 224, g: 85,  b: 85  }, // red again
+      { deg: 0,   r: 240, g: 60,  b: 60  }, // red   – headwind
+      { deg: 90,  r: 240, g: 170, b: 20  }, // yellow – right crosswind
+      { deg: 180, r: 40,  g: 200, b: 90  }, // green  – tailwind
+      { deg: 270, r: 240, g: 170, b: 20  }, // yellow – left crosswind
+      { deg: 360, r: 240, g: 60,  b: 60  }, // red again
     ];
     for (let i = 0; i < stops.length - 1; i++) {
       if (a >= stops[i].deg && a < stops[i + 1].deg) {
@@ -565,7 +580,12 @@ function App() {
             </div>
             <div>
               <div style={{ opacity: 0.6, fontSize: "0.75rem" }}>Avg wind</div>
-              <strong style={{ fontSize: "1.2rem" }}>{(avgWindSpeed * 3.6).toFixed(1)} km/h</strong>
+              <strong style={{ fontSize: "1.2rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                {(avgWindSpeed * 3.6).toFixed(1)} km/h
+                {avgWindSpeed * 3.6 > 20 && (
+                  <Icon icon="meteocons:windsock" title="Heavy wind" style={{ fontSize: "1.6rem" }} />
+                )}
+              </strong>
             </div>
           </div>
           {/* Checkpoint columns */}
@@ -583,8 +603,11 @@ function App() {
                 <Icon icon={getWeatherIcon(w.weather[0].icon)} style={{ fontSize: "2rem" }} />
                 <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{w.name}</div>
                 <div style={{ fontSize: "1rem", fontWeight: 600 }}>{w.main.temp.toFixed(1)}°C</div>
-                <div style={{ fontSize: "0.78rem", opacity: 0.8, marginTop: "0.2rem" }}>
+                <div style={{ fontSize: "0.78rem", opacity: 0.8, marginTop: "0.2rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem" }}>
                   💨 {(w.wind.speed * 3.6).toFixed(1)} km/h
+                  {w.wind.speed * 3.6 > 20 && (
+                    <Icon icon="meteocons:windsock" title="Heavy wind" style={{ fontSize: "1.6rem" }} />
+                  )}
                 </div>
                 <div style={{ fontSize: "0.78rem", opacity: 0.8 }}>
                   {getWindDirection(w.wind.deg)}{" "}
@@ -725,7 +748,6 @@ function App() {
                 <g transform={`rotate(${avgWindDeg + 180}, 60, 60)`}>
                   <polygon points="60,14 54,30 60,26 66,30" fill="#60a5fa" />
                   <line x1="60" y1="26" x2="60" y2="76" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" />
-                  <polygon points="60,86 54,72 66,72" fill="rgba(96,165,250,0.3)" />
                 </g>
                 <circle cx="60" cy="60" r="3.5" fill="#60a5fa" />
               </>
