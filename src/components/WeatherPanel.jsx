@@ -30,12 +30,12 @@ export default function WeatherPanel({
         Conditions on your {routeAnalysis ? routeAnalysis.totalKm.toFixed(1) : "—"} km route
       </div>
       {/* Averages row */}
-      <div style={{ display: "flex", gap: "1.2rem", marginBottom: "0.75rem", paddingBottom: "0.65rem", borderBottom: "1px solid rgba(255,255,255,0.1)", fontSize: "0.85rem" }}>
-        <div>
+      <div style={{ display: "flex", gap: "1.2rem", justifyContent: "center", marginBottom: "0.75rem", paddingBottom: "0.65rem", borderBottom: "1px solid rgba(255,255,255,0.1)", fontSize: "0.85rem" }}>
+        <div style={{ textAlign: "center" }}>
           <div style={{ opacity: 0.6, fontSize: "0.75rem" }}>Avg temp</div>
           <strong style={{ fontSize: "1.2rem" }}>{avgTemp.toFixed(1)}°C</strong>
         </div>
-        <div>
+        <div style={{ textAlign: "center" }}>
           <div style={{ opacity: 0.6, fontSize: "0.75rem" }}>Avg wind</div>
           <strong style={{ fontSize: "1.2rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
             {(avgWindSpeed * 3.6).toFixed(1)} km/h

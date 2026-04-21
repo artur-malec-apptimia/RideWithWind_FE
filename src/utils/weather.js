@@ -66,6 +66,58 @@ export function windAngleBgColor(angle, opacity = 0.38) {
   return `rgba(224,85,85,${opacity})`;
 }
 
+export function tempToColor(temp) {
+  const stops = [
+    { t: -10, r: 129, g: 140, b: 248 }, // indigo  – freezing
+    { t: 0,   r: 96,  g: 165, b: 250 }, // blue    – cold
+    { t: 10,  r: 52,  g: 211, b: 153 }, // teal    – cool
+    { t: 20,  r: 250, g: 204, b: 21  }, // yellow  – mild
+    { t: 30,  r: 249, g: 115, b: 22  }, // orange  – warm
+    { t: 40,  r: 239, g: 68,  b: 68  }, // red     – hot
+  ];
+  const clamped = Math.max(stops[0].t, Math.min(stops[stops.length - 1].t, temp));
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (clamped >= stops[i].t && clamped <= stops[i + 1].t) {
+      const frac = (clamped - stops[i].t) / (stops[i + 1].t - stops[i].t);
+      const r = Math.round(stops[i].r + frac * (stops[i + 1].r - stops[i].r));
+      const g = Math.round(stops[i].g + frac * (stops[i + 1].g - stops[i].g));
+      const b = Math.round(stops[i].b + frac * (stops[i + 1].b - stops[i].b));
+      return `rgb(${r},${g},${b})`;
+    }
+  }
+  return "rgb(239,68,68)";
+}
+
+export function buildTempColoredSegments(gpxPoints, weatherPoints) {
+  const temps = [weatherPoints[0].main.temp, weatherPoints[1].main.temp, weatherPoints[2].main.temp];
+  const n = gpxPoints.length;
+
+  const pointTemps = gpxPoints.map((_, i) => {
+    const t = i / (n - 1);
+    if (t <= 0.5) return temps[0] + (t / 0.5) * (temps[1] - temps[0]);
+    return temps[1] + ((t - 0.5) / 0.5) * (temps[2] - temps[1]);
+  });
+
+  const segments = [];
+  let i = 0;
+  while (i < n - 1) {
+    const bucket = Math.round(pointTemps[i]);
+    const startIdx = i;
+    let j = i + 1;
+    while (j < n && Math.round(pointTemps[j]) === bucket) j++;
+    const endIdx = j - 1;
+    segments.push({
+      color: tempToColor(pointTemps[startIdx]),
+      // include one extra point for visual continuity between segments
+      positions: gpxPoints.slice(startIdx, Math.min(j + 1, n)).map((p) => [p.lat, p.lon]),
+      startIdx,
+      endIdx,
+    });
+    i = j; // always advance past this segment
+  }
+  return segments;
+}
+
 export function todayStr() {
   return new Date().toISOString().split("T")[0];
 }

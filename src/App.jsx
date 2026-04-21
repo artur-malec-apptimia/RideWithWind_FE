@@ -8,7 +8,7 @@ import WindCompass from "./components/WindCompass";
 import WeatherPanel from "./components/WeatherPanel";
 import StravaRoutes from "./components/StravaRoutes";
 import { parseGPX, fetchRouteWeather, fetchWindAnalysis, fetchColoredSegments, fetchStravaStatus, disconnectStrava } from "./api";
-import { todayStr, nowTimeStr } from "./utils/weather";
+import { todayStr, nowTimeStr, buildTempColoredSegments } from "./utils/weather";
 import { panelStyle } from "./styles";
 
 function App() {
@@ -27,6 +27,7 @@ function App() {
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
   const [showStravaRoutes, setShowStravaRoutes] = useState(false);
+  const [vizMode, setVizMode] = useState("wind"); // "wind" | "temp"
 
   useEffect(() => {
     fetchStravaStatus().then(({ connected }) => setStravaConnected(connected));
@@ -139,6 +140,10 @@ function App() {
       ]
     : [];
 
+  const tempColoredSegments =
+    weatherPoints && gpxPoints ? buildTempColoredSegments(gpxPoints, weatherPoints) : null;
+  const activeSegments = vizMode === "temp" ? tempColoredSegments : coloredSegments;
+
   return (
     <div>
       {gpxPoints ? (
@@ -146,7 +151,7 @@ function App() {
           weatherPoints={weatherPoints}
           gpxPoints={gpxPoints}
           gpxMidPoint={gpxMidPoint}
-          coloredSegments={coloredSegments}
+          coloredSegments={activeSegments}
           hoveredPoint={hoveredPoint}
         />
       ) : (
@@ -320,8 +325,36 @@ function App() {
           {/* Elevation panel */}
           {gpxPoints && gpxPoints.some(p => p.ele != null) && (
             <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto", marginTop: "auto" }}>
-              <div style={{ fontSize: "0.72rem", opacity: 0.5, marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
-              <ElevationChart points={gpxPoints} coloredSegments={coloredSegments} onHover={setHoveredPoint} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                <div style={{ fontSize: "0.72rem", opacity: 0.5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
+                {weatherPoints && (
+                  <div style={{ display: "flex", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "6px", overflow: "hidden" }}>
+                    {[
+                      { key: "wind", label: "Wind" },
+                      { key: "temp", label: "Temp" },
+                    ].map(({ key, label }, idx) => (
+                      <button
+                        key={key}
+                        onClick={() => setVizMode(key)}
+                        style={{
+                          padding: "0.15rem 0.55rem",
+                          border: "none",
+                          borderRight: idx === 0 ? "1px solid rgba(255,255,255,0.18)" : "none",
+                          background: vizMode === key ? "rgba(255,255,255,0.18)" : "transparent",
+                          color: vizMode === key ? "#fff" : "rgba(255,255,255,0.45)",
+                          fontSize: "0.72rem",
+                          fontWeight: vizMode === key ? 600 : 400,
+                          cursor: "pointer",
+                          transition: "background 0.15s, color 0.15s",
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <ElevationChart points={gpxPoints} coloredSegments={activeSegments} onHover={setHoveredPoint} />
             </div>
           )}
 

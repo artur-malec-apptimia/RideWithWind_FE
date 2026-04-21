@@ -4,6 +4,25 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import riderIcon from "../assets/RiderIcon.png";
 
+const BLEND = 12; // points on each side of a boundary used for color blending
+
+function parseColor(color) {
+  if (color.startsWith("#")) {
+    return [parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16), parseInt(color.slice(5, 7), 16)];
+  }
+  const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  return m ? [+m[1], +m[2], +m[3]] : [128, 128, 128];
+}
+
+function lerpColor(colorA, colorB, t) {
+  const [r1, g1, b1] = parseColor(colorA);
+  const [r2, g2, b2] = parseColor(colorB);
+  const r = Math.round(r1 + t * (r2 - r1));
+  const g = Math.round(g1 + t * (g2 - g1));
+  const bl = Math.round(b1 + t * (b2 - b1));
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${bl.toString(16).padStart(2, "0")}`;
+}
+
 function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   const map = useMap();
   useEffect(() => {
@@ -37,12 +56,31 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
         <MapUpdater lat={lat} lon={lon} zoom={zoom} gpxPoints={gpxPoints} />
         {polyline && (
           <>
-            {coloredSegments
-              ? coloredSegments.map((seg, i) => (
+            {coloredSegments ? (
+              <>
+                {/* Solid base segments */}
+                {coloredSegments.map((seg, i) => (
                   <Polyline key={i} positions={seg.positions} pathOptions={{ color: seg.color, weight: 4 }} />
-                ))
-              : <Polyline positions={polyline} pathOptions={{ color: "#555566", weight: 4 }} />
-            }
+                ))}
+                {/* Gradient transition zones rendered on top */}
+                {coloredSegments.flatMap((seg, i) => {
+                  const next = coloredSegments[i + 1];
+                  if (!next || next.color === seg.color) return [];
+                  const n = Math.min(BLEND, Math.floor(seg.positions.length / 2), Math.floor(next.positions.length / 2));
+                  if (n < 1) return [];
+                  const pts = [...seg.positions.slice(-n), ...next.positions.slice(0, n)];
+                  return pts.slice(0, -1).map((p, j) => (
+                    <Polyline
+                      key={`g-${i}-${j}`}
+                      positions={[p, pts[j + 1]]}
+                      pathOptions={{ color: lerpColor(seg.color, next.color, j / (pts.length - 2)), weight: 4 }}
+                    />
+                  ));
+                })}
+              </>
+            ) : (
+              <Polyline positions={polyline} pathOptions={{ color: "#555566", weight: 4 }} />
+            )}
             <Pane name="route-points" style={{ zIndex: 450 }}>
               <CircleMarker
                 center={polyline[0]}
