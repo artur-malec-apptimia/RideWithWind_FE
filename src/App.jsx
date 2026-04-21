@@ -153,6 +153,7 @@ function App() {
           gpxMidPoint={gpxMidPoint}
           coloredSegments={activeSegments}
           hoveredPoint={hoveredPoint}
+          vizMode={vizMode}
         />
       ) : (
         <div style={{ position: "fixed", inset: 0, zIndex: 0 }}>

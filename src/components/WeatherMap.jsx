@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, Pane, ZoomControl, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, Tooltip, CircleMarker, Marker, Pane, ZoomControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import riderIcon from "../assets/RiderIcon.png";
@@ -23,6 +23,15 @@ function lerpColor(colorA, colorB, t) {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${bl.toString(16).padStart(2, "0")}`;
 }
 
+function interpolate(t, weatherPoints, getValue) {
+  if (t <= 0.5) {
+    const f = t / 0.5;
+    return getValue(weatherPoints[0]) * (1 - f) + getValue(weatherPoints[1]) * f;
+  }
+  const f = (t - 0.5) / 0.5;
+  return getValue(weatherPoints[1]) * (1 - f) + getValue(weatherPoints[2]) * f;
+}
+
 function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   const map = useMap();
   useEffect(() => {
@@ -35,7 +44,7 @@ function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   return null;
 }
 
-export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments, hoveredPoint }) {
+export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments, hoveredPoint, vizMode }) {
   const startWeather = weatherPoints?.[0];
   const lat = startWeather?.coord.lat ?? 20;
   const lon = startWeather?.coord.lon ?? 0;
@@ -59,10 +68,26 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
             {coloredSegments ? (
               <>
                 {/* Solid base segments */}
-                {coloredSegments.map((seg, i) => (
-                  <Polyline key={i} positions={seg.positions} pathOptions={{ color: seg.color, weight: 4 }} />
-                ))}
-                {/* Gradient transition zones rendered on top */}
+                {coloredSegments.map((seg, i) => {
+                  const t = gpxPoints && seg.startIdx != null
+                    ? (seg.startIdx + seg.endIdx) / 2 / (gpxPoints.length - 1)
+                    : 0.5;
+                  let tooltipText = null;
+                  if (weatherPoints && vizMode === "wind")
+                    tooltipText = `💨 ${(interpolate(t, weatherPoints, w => w.wind.speed) * 3.6).toFixed(1)} km/h`;
+                  else if (weatherPoints && vizMode === "temp")
+                    tooltipText = `🌡️ ${interpolate(t, weatherPoints, w => w.main.temp).toFixed(1)}°C`;
+                  return (
+                    <Polyline key={i} positions={seg.positions} pathOptions={{ color: seg.color, weight: 4 }}>
+                      {tooltipText && (
+                        <Tooltip sticky direction="top" offset={[0, -4]} opacity={1} className="wind-tooltip">
+                          {tooltipText}
+                        </Tooltip>
+                      )}
+                    </Polyline>
+                  );
+                })}
+                {/* Gradient transition zones rendered on top (non-interactive so base segments get mouse events) */}
                 {coloredSegments.flatMap((seg, i) => {
                   const next = coloredSegments[i + 1];
                   if (!next || next.color === seg.color) return [];
@@ -73,7 +98,7 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                     <Polyline
                       key={`g-${i}-${j}`}
                       positions={[p, pts[j + 1]]}
-                      pathOptions={{ color: lerpColor(seg.color, next.color, j / (pts.length - 2)), weight: 4 }}
+                      pathOptions={{ color: lerpColor(seg.color, next.color, j / (pts.length - 2)), weight: 4, interactive: false }}
                     />
                   ));
                 })}

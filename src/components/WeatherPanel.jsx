@@ -26,7 +26,7 @@ export default function WeatherPanel({
           <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
         </div>
       )}
-      <div style={{ fontSize: "0.75rem", opacity: 0.5, marginBottom: "0.6rem" }}>
+      <div style={{ fontSize: "0.75rem", opacity: 0.5, marginBottom: "0.6rem", textAlign: "center" }}>
         Conditions on your {routeAnalysis ? routeAnalysis.totalKm.toFixed(1) : "—"} km route
       </div>
       {/* Averages row */}
@@ -46,7 +46,7 @@ export default function WeatherPanel({
         </div>
       </div>
       {/* Checkpoint columns */}
-      <div style={{ display: "flex", gap: "1rem" }}>
+      <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
         {checkpoints.map(({ label, w }) => (
           <div key={label} style={{ textAlign: "center", minWidth: "80px" }}>
             <div style={{ fontSize: "0.7rem", opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
@@ -75,7 +75,7 @@ export default function WeatherPanel({
         ))}
       </div>
       {/* Speed input */}
-      <div style={{ marginTop: "0.75rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+      <div style={{ marginTop: "0.75rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
         <Icon icon="mingcute:bike-line" style={{ opacity: 0.6 }} />
         <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>Avg speed</span>
         <input

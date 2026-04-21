@@ -118,6 +118,21 @@
   animation-iteration-count: infinite !important;
 }
 
+.wind-tooltip {
+  background: rgba(15, 15, 25, 0.88) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 6px !important;
+  color: #fff !important;
+  font-size: 0.8rem !important;
+  padding: 0.25rem 0.55rem !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+  white-space: nowrap;
+}
+
+.wind-tooltip::before {
+  display: none !important;
+}
+
 .spinner {
   display: inline-block;
   width: 1em;
