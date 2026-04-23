@@ -13,7 +13,7 @@ export async function fetchRouteWeather(points, speedKmh, startUnix) {
   const res = await fetch(`${BASE}/route-weather`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ points, speed_kmh: speedKmh, start_unix: startUnix }),
+    body: JSON.stringify({ points, speed_kmh: speedKmh, start_unix: startUnix, num_points: 5 }),
   });
   if (!res.ok) throw new Error(`Server error: ${res.status}`);
   return res.json(); // { mid_point, weather_points }

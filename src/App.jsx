@@ -121,7 +121,7 @@ function App() {
       const next = gpxPoints[Math.min(gpxPoints.length - 1, idx + 1)];
       const riderBearing = (Math.atan2(next.lon - prev.lon, next.lat - prev.lat) * 180 / Math.PI + 360) % 360;
       const t = idx / (gpxPoints.length - 1);
-      const wpIdx = t < 0.33 ? 0 : t < 0.66 ? 1 : 2;
+      const wpIdx = Math.round(t * (weatherPoints.length - 1));
       const windDeg = weatherPoints[wpIdx].wind.deg;
       relativeWindAngle = (windDeg - riderBearing + 360) % 360;
       const a = relativeWindAngle;
@@ -135,8 +135,8 @@ function App() {
   const checkpoints = weatherPoints
     ? [
         { label: "Start",  w: weatherPoints[0] },
-        { label: "Mid",    w: weatherPoints[1] },
-        { label: "Finish", w: weatherPoints[2] },
+        { label: "Mid",    w: weatherPoints[Math.floor((weatherPoints.length - 1) / 2)] },
+        { label: "Finish", w: weatherPoints[weatherPoints.length - 1] },
       ]
     : [];
 

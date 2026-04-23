@@ -37,7 +37,7 @@ export default function WeatherPanel({
         </div>
         <div style={{ textAlign: "center" }}>
           <div style={{ opacity: 0.6, fontSize: "0.75rem" }}>Avg wind</div>
-          <strong style={{ fontSize: "1.2rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+          <strong style={{ fontSize: "1.2rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3rem" }}>
             {(avgWindSpeed * 3.6).toFixed(1)} km/h
             {avgWindSpeed * 3.6 > 20 && (
               <Icon icon="meteocons:windsock" title="Heavy wind" style={{ fontSize: "1.6rem" }} />

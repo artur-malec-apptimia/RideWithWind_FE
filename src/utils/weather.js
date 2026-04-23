@@ -89,13 +89,15 @@ export function tempToColor(temp) {
 }
 
 export function buildTempColoredSegments(gpxPoints, weatherPoints) {
-  const temps = [weatherPoints[0].main.temp, weatherPoints[1].main.temp, weatherPoints[2].main.temp];
+  const nw = weatherPoints.length;
   const n = gpxPoints.length;
 
   const pointTemps = gpxPoints.map((_, i) => {
     const t = i / (n - 1);
-    if (t <= 0.5) return temps[0] + (t / 0.5) * (temps[1] - temps[0]);
-    return temps[1] + ((t - 0.5) / 0.5) * (temps[2] - temps[1]);
+    const scaled = t * (nw - 1);
+    const wi = Math.min(Math.floor(scaled), nw - 2);
+    const f = scaled - wi;
+    return weatherPoints[wi].main.temp * (1 - f) + weatherPoints[wi + 1].main.temp * f;
   });
 
   const segments = [];

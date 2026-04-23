@@ -24,12 +24,11 @@ function lerpColor(colorA, colorB, t) {
 }
 
 function interpolate(t, weatherPoints, getValue) {
-  if (t <= 0.5) {
-    const f = t / 0.5;
-    return getValue(weatherPoints[0]) * (1 - f) + getValue(weatherPoints[1]) * f;
-  }
-  const f = (t - 0.5) / 0.5;
-  return getValue(weatherPoints[1]) * (1 - f) + getValue(weatherPoints[2]) * f;
+  const n = weatherPoints.length;
+  const scaled = t * (n - 1);
+  const i = Math.min(Math.floor(scaled), n - 2);
+  const f = scaled - i;
+  return getValue(weatherPoints[i]) * (1 - f) + getValue(weatherPoints[i + 1]) * f;
 }
 
 function MapUpdater({ lat, lon, zoom, gpxPoints }) {
