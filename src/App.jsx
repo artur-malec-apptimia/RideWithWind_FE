@@ -267,29 +267,27 @@ function App() {
         {error && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "#f87171" }}>{error}</p>}
       </div>
 
-      {/* Left column: weather + wind analysis + elevation */}
-      {(weatherPoints || (gpxPoints && gpxPoints.some(p => p.ele != null))) && (
+      {/* Left column: weather + wind analysis */}
+      {weatherPoints && (
         <div style={{ position: "fixed", left: "1rem", top: "1rem", bottom: "1rem", zIndex: 10, display: "flex", flexDirection: "column", justifyContent: "flex-start", pointerEvents: "none", gap: "1rem" }}>
 
-          {weatherPoints && (
-            <WeatherPanel
-              loading={loading}
-              routeAnalysis={routeAnalysis}
-              avgTemp={avgTemp}
-              avgWindSpeed={avgWindSpeed}
-              checkpoints={checkpoints}
-              startDate={startDate}
-              startTime={startTime}
-              nowUnixDisplay={nowUnixDisplay}
-              speedInput={speedInput}
-              setSpeedInput={setSpeedInput}
-              avgSpeed={avgSpeed}
-              setAvgSpeed={setAvgSpeed}
-              gpxPoints={gpxPoints}
-              fetchWeatherForRoute={handleFetchWeather}
-              getStartUnix={getStartUnix}
-            />
-          )}
+          <WeatherPanel
+            loading={loading}
+            routeAnalysis={routeAnalysis}
+            avgTemp={avgTemp}
+            avgWindSpeed={avgWindSpeed}
+            checkpoints={checkpoints}
+            startDate={startDate}
+            startTime={startTime}
+            nowUnixDisplay={nowUnixDisplay}
+            speedInput={speedInput}
+            setSpeedInput={setSpeedInput}
+            avgSpeed={avgSpeed}
+            setAvgSpeed={setAvgSpeed}
+            gpxPoints={gpxPoints}
+            fetchWeatherForRoute={handleFetchWeather}
+            getStartUnix={getStartUnix}
+          />
 
           {/* Wind analysis panel */}
           {routeAnalysis && (
@@ -323,42 +321,42 @@ function App() {
             </div>
           )}
 
-          {/* Elevation panel */}
-          {gpxPoints && gpxPoints.some(p => p.ele != null) && (
-            <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto", marginTop: "auto" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                <div style={{ fontSize: "0.72rem", opacity: 0.5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
-                {weatherPoints && (
-                  <div style={{ display: "flex", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "6px", overflow: "hidden" }}>
-                    {[
-                      { key: "wind", label: "Wind" },
-                      { key: "temp", label: "Temp" },
-                    ].map(({ key, label }, idx) => (
-                      <button
-                        key={key}
-                        onClick={() => setVizMode(key)}
-                        style={{
-                          padding: "0.15rem 0.55rem",
-                          border: "none",
-                          borderRight: idx === 0 ? "1px solid rgba(255,255,255,0.18)" : "none",
-                          background: vizMode === key ? "rgba(255,255,255,0.18)" : "transparent",
-                          color: vizMode === key ? "#fff" : "rgba(255,255,255,0.45)",
-                          fontSize: "0.72rem",
-                          fontWeight: vizMode === key ? 600 : 400,
-                          cursor: "pointer",
-                          transition: "background 0.15s, color 0.15s",
-                        }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <ElevationChart points={gpxPoints} coloredSegments={activeSegments} onHover={setHoveredPoint} />
-            </div>
-          )}
+        </div>
+      )}
 
+      {/* Bottom-centre: elevation panel */}
+      {gpxPoints && gpxPoints.some(p => p.ele != null) && (
+        <div style={{ ...panelStyle, position: "fixed", bottom: "1rem", left: "50%", transform: "translateX(-50%)", zIndex: 10, width: "min(820px, calc(100vw - 2rem))", pointerEvents: "auto" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+            <div style={{ fontSize: "0.72rem", opacity: 0.5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
+            {weatherPoints && (
+              <div style={{ display: "flex", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "6px", overflow: "hidden" }}>
+                {[
+                  { key: "wind", label: "Wind" },
+                  { key: "temp", label: "Temp" },
+                ].map(({ key, label }, idx) => (
+                  <button
+                    key={key}
+                    onClick={() => setVizMode(key)}
+                    style={{
+                      padding: "0.15rem 0.55rem",
+                      border: "none",
+                      borderRight: idx === 0 ? "1px solid rgba(255,255,255,0.18)" : "none",
+                      background: vizMode === key ? "rgba(255,255,255,0.18)" : "transparent",
+                      color: vizMode === key ? "#fff" : "rgba(255,255,255,0.45)",
+                      fontSize: "0.72rem",
+                      fontWeight: vizMode === key ? 600 : 400,
+                      cursor: "pointer",
+                      transition: "background 0.15s, color 0.15s",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <ElevationChart points={gpxPoints} coloredSegments={activeSegments} onHover={setHoveredPoint} />
         </div>
       )}
 

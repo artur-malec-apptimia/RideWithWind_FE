@@ -16,14 +16,14 @@ export function getWeatherIcon(iconCode) {
     "09d": "meteocons:overcast-drizzle-fill",
     "09n": "meteocons:overcast-drizzle-fill",
     // Rain
-    "10d": "meteocons:overcast-rain-fill",
-    "10n": "meteocons:overcast-rain-fill",
+    "10d": "meteocons:raindrops-fill",
+    "10n": "meteocons:raindrops",
     // Thunderstorm
     "11d": "meteocons:thunderstorms-day-fill",
     "11n": "meteocons:thunderstorms-night-fill",
     // Snow
-    "13d": "meteocons:partly-cloudy-day-snow-fill",
-    "13n": "meteocons:partly-cloudy-night-snow-fill",
+    "13d": "meteocons:snowflake-fill",
+    "13n": "meteocons:snowflake",
     // Mist/fog
     "50d": "meteocons:mist-fill",
     "50n": "meteocons:mist-fill",

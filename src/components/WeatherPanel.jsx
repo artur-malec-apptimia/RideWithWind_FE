@@ -57,7 +57,7 @@ export default function WeatherPanel({
                     : `${new Date(`${startDate}T${startTime}`).toLocaleDateString([], { month: "short", day: "numeric" })} · ${startTime}`)
                 : formatEta(w._eta, nowUnixDisplay)}
             </div>
-            <Icon icon={getWeatherIcon(w.weather[0].icon)} style={{ fontSize: "2rem" }} />
+            <Icon icon={getWeatherIcon(w.weather[0].icon)} style={{ fontSize: "3rem" }} />
             <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{w.name}</div>
             <div style={{ fontSize: "1rem", fontWeight: 600 }}>{w.main.temp.toFixed(1)}°C</div>
             <div style={{ fontSize: "0.78rem", opacity: 0.8, marginTop: "0.2rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem" }}>

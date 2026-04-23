@@ -130,16 +130,35 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
             </Pane>
           </>
         )}
-        {hoveredPoint && (
-          <Marker
-            position={[hoveredPoint.lat, hoveredPoint.lon]}
-            icon={L.divIcon({
-              className: "",
-              html: `<div style="width:30px;height:30px;border-radius:50%;background:#60a5fa;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.4)"><img src="${riderIcon}" style="width:28px;height:28px;object-fit:contain" /></div>`,
-              iconAnchor: [20, 20],
-            })}
-          />
-        )}
+        {hoveredPoint && (() => {
+          let tooltipText = null;
+          if (weatherPoints && gpxPoints) {
+            const idx = gpxPoints.findIndex(p => p.lat === hoveredPoint.lat && p.lon === hoveredPoint.lon);
+            if (idx >= 0) {
+              const t = idx / (gpxPoints.length - 1);
+              if (vizMode === "wind")
+                tooltipText = `💨 ${(interpolate(t, weatherPoints, w => w.wind.speed) * 3.6).toFixed(1)} km/h`;
+              else
+                tooltipText = `🌡️ ${interpolate(t, weatherPoints, w => w.main.temp).toFixed(1)}°C`;
+            }
+          }
+          return (
+            <Marker
+              position={[hoveredPoint.lat, hoveredPoint.lon]}
+              icon={L.divIcon({
+                className: "",
+                html: `<div style="width:30px;height:30px;border-radius:50%;background:#60a5fa;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.4)"><img src="${riderIcon}" style="width:28px;height:28px;object-fit:contain" /></div>`,
+                iconAnchor: [20, 20],
+              })}
+            >
+              {tooltipText && (
+                <Tooltip permanent direction="top" offset={[0, -34]} opacity={1} className="wind-tooltip">
+                  {tooltipText}
+                </Tooltip>
+              )}
+            </Marker>
+          );
+        })()}
       </MapContainer>
     </div>
   );
