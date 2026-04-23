@@ -66,9 +66,18 @@ export default function WeatherPanel({
                 <Icon icon="meteocons:windsock" title="Heavy wind" style={{ fontSize: "1.6rem" }} />
               )}
             </div>
-            <div style={{ fontSize: "0.78rem", opacity: 0.8 }}>
-              {getWindDirection(w.wind.deg)}{" "}
-              <span style={{ display: "inline-block", transform: `rotate(${w.wind.deg + 180}deg)` }}>↑</span>
+            <div style={{ fontSize: "0.78rem", opacity: 0.8, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem" }}>
+              {getWindDirection(w.wind.deg)}
+              <svg width="16" height="16" viewBox="0 0 16 16">
+                <g transform={`rotate(${w.wind.deg + 90}, 8, 8)`}>
+                  <svg x="1" y="1" width="14" height="14" viewBox="67 140 452 338" preserveAspectRatio="xMidYMid meet">
+                    <path
+                      d="m284.27618,140.84596l23.41132,118.56029l-240.34375,-25l0,157.9375l240.34375,-25l-23.41132,111.22095l234.66132,-165.1897l-234.66132,-172.52904z"
+                      fill="#60a5fa" stroke="#93c5fd" strokeWidth="15" strokeLinejoin="round" fillRule="evenodd"
+                    />
+                  </svg>
+                </g>
+              </svg>
             </div>
             <div style={{ fontSize: "0.75rem", opacity: 0.6 }}>{w.weather[0].main}</div>
           </div>

@@ -49,11 +49,14 @@ export default function WindCompass({ avgWindDeg, avgWindSpeed, relativeWindAngl
                 {lbl}
               </text>
             ))}
-            <g transform={`rotate(${avgWindDeg + 180}, 60, 60)`}>
-              <polygon points="60,14 54,30 60,26 66,30" fill="#60a5fa" />
-              <line x1="60" y1="26" x2="60" y2="76" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" />
+            <g transform={`rotate(${avgWindDeg + 90}, 60, 60)`}>
+              <svg x="25" y="25" width="70" height="70" viewBox="67 140 452 338" preserveAspectRatio="xMidYMid meet">
+                <path
+                  d="m284.27618,140.84596l23.41132,118.56029l-240.34375,-25l0,157.9375l240.34375,-25l-23.41132,111.22095l234.66132,-165.1897l-234.66132,-172.52904z"
+                  fill="#60a5fa" stroke="#93c5fd" strokeWidth="15" strokeLinejoin="round" fillRule="evenodd"
+                />
+              </svg>
             </g>
-            <circle cx="60" cy="60" r="3.5" fill="#60a5fa" />
           </>
         )}
       </svg>

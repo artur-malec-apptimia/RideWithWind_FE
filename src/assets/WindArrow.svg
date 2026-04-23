@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="744.09448" height="1052.3622" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <title>Transparent Arrow</title>
+ <g>
+  <title>Layer 1</title>
+  <use height="1052.3622" id="use1503" width="744.09448" x="10" xlink:href="#rect899" y="10"/>
+  <path d="m284.27618,140.84596l23.41132,118.56029l-240.34375,-25l0,157.9375l240.34375,-25l-23.41132,111.22095l234.66132,-165.1897l-234.66132,-172.52904z" id="rect899" stroke-miterlimit="4" stroke-linejoin="round" stroke-linecap="round" stroke-width="15" stroke="#000000" fill-rule="evenodd" fill="#ff0000"/>
+ </g>
+</svg>
