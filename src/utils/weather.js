@@ -88,16 +88,25 @@ export function tempToColor(temp) {
   return "rgb(239,68,68)";
 }
 
+const LAPSE_RATE = 0.0065; // °C per meter
+
 export function buildTempColoredSegments(gpxPoints, weatherPoints) {
   const nw = weatherPoints.length;
   const n = gpxPoints.length;
 
-  const pointTemps = gpxPoints.map((_, i) => {
+  const pointTemps = gpxPoints.map((p, i) => {
     const t = i / (n - 1);
     const scaled = t * (nw - 1);
     const wi = Math.min(Math.floor(scaled), nw - 2);
     const f = scaled - wi;
-    return weatherPoints[wi].main.temp * (1 - f) + weatherPoints[wi + 1].main.temp * f;
+    const baseTemp = weatherPoints[wi].main.temp * (1 - f) + weatherPoints[wi + 1].main.temp * f;
+    const w0Ele = weatherPoints[wi]._ele;
+    const w1Ele = weatherPoints[wi + 1]._ele;
+    if (p.ele != null && w0Ele != null && w1Ele != null) {
+      const refEle = w0Ele * (1 - f) + w1Ele * f;
+      return baseTemp - LAPSE_RATE * (p.ele - refEle);
+    }
+    return baseTemp;
   });
 
   const segments = [];

@@ -31,6 +31,23 @@ function interpolate(t, weatherPoints, getValue) {
   return getValue(weatherPoints[i]) * (1 - f) + getValue(weatherPoints[i + 1]) * f;
 }
 
+const LAPSE_RATE = 0.0065;
+
+function interpolateTemp(t, weatherPoints, pointEle) {
+  const n = weatherPoints.length;
+  const scaled = t * (n - 1);
+  const i = Math.min(Math.floor(scaled), n - 2);
+  const f = scaled - i;
+  const baseTemp = weatherPoints[i].main.temp * (1 - f) + weatherPoints[i + 1].main.temp * f;
+  const w0Ele = weatherPoints[i]._ele;
+  const w1Ele = weatherPoints[i + 1]._ele;
+  if (pointEle != null && w0Ele != null && w1Ele != null) {
+    const refEle = w0Ele * (1 - f) + w1Ele * f;
+    return baseTemp - LAPSE_RATE * (pointEle - refEle);
+  }
+  return baseTemp;
+}
+
 function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   const map = useMap();
   useEffect(() => {
@@ -74,8 +91,11 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                   let tooltipText = null;
                   if (weatherPoints && vizMode === "wind")
                     tooltipText = `💨 ${(interpolate(t, weatherPoints, w => w.wind.speed) * 3.6).toFixed(1)} km/h`;
-                  else if (weatherPoints && vizMode === "temp")
-                    tooltipText = `🌡️ ${interpolate(t, weatherPoints, w => w.main.temp).toFixed(1)}°C`;
+                  else if (weatherPoints && vizMode === "temp") {
+                    const midIdx = Math.floor((seg.startIdx + (seg.endIdx ?? seg.startIdx)) / 2);
+                    const pointEle = gpxPoints?.[midIdx]?.ele ?? null;
+                    tooltipText = `🌡️ ${interpolateTemp(t, weatherPoints, pointEle).toFixed(1)}°C`;
+                  }
                   return (
                     <Polyline key={i} positions={seg.positions} pathOptions={{ color: seg.color, weight: 4 }}>
                       {tooltipText && (
@@ -138,7 +158,7 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
               if (vizMode === "wind")
                 tooltipText = `💨 ${(interpolate(t, weatherPoints, w => w.wind.speed) * 3.6).toFixed(1)} km/h`;
               else
-                tooltipText = `🌡️ ${interpolate(t, weatherPoints, w => w.main.temp).toFixed(1)}°C`;
+                tooltipText = `🌡️ ${interpolateTemp(t, weatherPoints, gpxPoints[idx]?.ele ?? null).toFixed(1)}°C`;
             }
           }
           return (
