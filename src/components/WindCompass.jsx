@@ -3,7 +3,7 @@ import cyclistAbove from "../assets/CyclistAbove.png";
 import { panelStyle } from "../styles";
 import { windAngleBgColor, getWindDirection } from "../utils/weather";
 
-export default function WindCompass({ avgWindDeg, avgWindSpeed, relativeWindAngle, relativeWindLabel, loading }) {
+export default function WindCompass({ avgWindDeg, avgWindSpeed, relativeWindAngle, relativeWindLabel, hoveredWindSpeed, loading }) {
   return (
     <div style={{ ...panelStyle, top: "1rem", right: "1rem", textAlign: "center", minWidth: "180px" }}>
       {loading && (
@@ -64,7 +64,9 @@ export default function WindCompass({ avgWindDeg, avgWindSpeed, relativeWindAngl
         {relativeWindAngle !== null ? relativeWindLabel : getWindDirection(avgWindDeg)}
       </div>
       <div style={{ fontSize: "0.8rem", opacity: 0.65, marginTop: "0.1rem" }}>
-        {(avgWindSpeed * 3.6).toFixed(1)} km/h avg
+        {relativeWindAngle !== null && hoveredWindSpeed !== null
+          ? `${(hoveredWindSpeed * 3.6).toFixed(1)} km/h`
+          : `${(avgWindSpeed * 3.6).toFixed(1)} km/h avg`}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ export default function WeatherPanel({
   routeAnalysis,
   avgTemp,
   avgWindSpeed,
+  avgWindGust,
   checkpoints,
   startDate,
   startTime,
@@ -44,6 +45,19 @@ export default function WeatherPanel({
             )}
           </strong>
         </div>
+        {avgWindGust && (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ opacity: 0.6, fontSize: "0.75rem" }}>Avg gusts</div>
+            <strong style={{ fontSize: "1.2rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3rem" }}>
+              {(avgWindGust * 3.6).toFixed(1)} km/h
+              {avgWindGust * 3.6 > 80
+                ? <Icon icon="meteocons:code-red-fill" style={{ fontSize: "1.6rem" }} />
+                : avgWindGust * 3.6 > 50
+                  ? <Icon icon="meteocons:code-yellow-fill" style={{ fontSize: "1.6rem" }} />
+                  : null}
+            </strong>
+          </div>
+        )}
       </div>
       {/* Checkpoint columns */}
       <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
@@ -66,6 +80,17 @@ export default function WeatherPanel({
                 <Icon icon="meteocons:windsock" title="Heavy wind" style={{ fontSize: "1.6rem" }} />
               )}
             </div>
+            {w.wind.gust && (
+              <div style={{ fontSize: "0.75rem", opacity: 0.55, marginBottom: "0.1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem" }}>
+                <Icon icon="meteocons:wind" style={{ fontSize: "1.2rem" }} />
+                {(w.wind.gust * 3.6).toFixed(1)} km/h
+                {w.wind.gust * 3.6 > 70
+                  ? <Icon icon="meteocons:code-red-fill" style={{ fontSize: "1.2rem" }} />
+                  : w.wind.gust * 3.6 > 50
+                    ? <Icon icon="meteocons:code-yellow-fill" style={{ fontSize: "1.2rem" }} />
+                    : null}
+              </div>
+            )}
             <div style={{ fontSize: "0.78rem", opacity: 0.8, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem" }}>
               {getWindDirection(w.wind.deg)}
               <svg width="16" height="16" viewBox="0 0 16 16">

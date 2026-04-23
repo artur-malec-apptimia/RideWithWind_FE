@@ -100,6 +100,9 @@ function App() {
   const avgWindSpeed = weatherPoints
     ? weatherPoints.reduce((s, w) => s + w.wind.speed, 0) / weatherPoints.length
     : null;
+  const avgWindGust = weatherPoints && weatherPoints.some(w => w.wind.gust)
+    ? weatherPoints.reduce((s, w) => s + (w.wind.gust ?? w.wind.speed), 0) / weatherPoints.length
+    : null;
   // Circular mean for wind direction (avoids 350°+10° = 180° bug)
   const avgWindDeg = weatherPoints
     ? (() => {
@@ -114,6 +117,7 @@ function App() {
   // Relative wind angle for hovered elevation point
   let relativeWindAngle = null;
   let relativeWindLabel = null;
+  let hoveredWindSpeed = null;
   if (hoveredPoint && gpxPoints && weatherPoints) {
     const idx = gpxPoints.findIndex(p => p.lat === hoveredPoint.lat && p.lon === hoveredPoint.lon);
     if (idx >= 0) {
@@ -129,6 +133,10 @@ function App() {
                         : a < 135 ? "Right crosswind"
                         : a < 225 ? "Tailwind"
                         : "Left crosswind";
+      const scaled = t * (weatherPoints.length - 1);
+      const wi = Math.min(Math.floor(scaled), weatherPoints.length - 2);
+      const f = scaled - wi;
+      hoveredWindSpeed = weatherPoints[wi].wind.speed * (1 - f) + weatherPoints[wi + 1].wind.speed * f;
     }
   }
 
@@ -276,6 +284,7 @@ function App() {
             routeAnalysis={routeAnalysis}
             avgTemp={avgTemp}
             avgWindSpeed={avgWindSpeed}
+            avgWindGust={avgWindGust}
             checkpoints={checkpoints}
             startDate={startDate}
             startTime={startTime}
@@ -367,6 +376,7 @@ function App() {
           avgWindSpeed={avgWindSpeed}
           relativeWindAngle={relativeWindAngle}
           relativeWindLabel={relativeWindLabel}
+          hoveredWindSpeed={hoveredWindSpeed}
           loading={loading}
         />
       )}
