@@ -17,6 +17,16 @@ export default function ElevationChart({ points, coloredSegments, onHover }) {
   const eles = points.map(p => p.ele).filter(e => e != null);
   if (eles.length < 2) return <div style={{ fontSize: "0.75rem", opacity: 0.5 }}>No elevation data</div>;
 
+  const toRad = d => d * Math.PI / 180;
+  const cumKm = [0];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    const dLat = toRad(b.lat - a.lat), dLon = toRad(b.lon - a.lon);
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
+    cumKm.push(cumKm[i - 1] + 6371 * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s)));
+  }
+  const totalKm = cumKm[cumKm.length - 1];
+
   const step = Math.max(1, Math.floor(points.length / 400));
   const sampledIndices = [];
   for (let i = 0; i < points.length; i++) {
@@ -89,10 +99,13 @@ export default function ElevationChart({ points, coloredSegments, onHover }) {
 
   return (
     <div ref={containerRef}>
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "0.4rem", fontSize: "0.8rem" }}>
+      <div style={{ display: "flex", gap: "1rem", marginBottom: "0.4rem", fontSize: "0.8rem", alignItems: "center" }}>
         <span style={{ color: "#4ade80" }}>↑ {Math.round(gain)} m</span>
         <span style={{ color: "#f87171" }}>↓ {Math.round(loss)} m</span>
         <span style={{ opacity: 0.5 }}>{Math.round(minE)}–{Math.round(maxE)} m</span>
+        <span style={{ marginLeft: "auto", visibility: hoverSi !== null ? "visible" : "hidden", opacity: 0.7 }}>
+          {hoverSi !== null ? `${cumKm[sampledIndices[hoverSi]].toFixed(1)} / ${totalKm.toFixed(1)} km` : "\u00a0"}
+        </span>
       </div>
       <svg width={W} height={H} style={{ display: "block", width: "100%", cursor: "crosshair" }}
         onMouseMove={handleMouseMove}
