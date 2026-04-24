@@ -6,12 +6,22 @@ export default function StravaRoutes({ onSelectRoute, onClose }) {
   const [error, setError] = useState(null);
   const [loadingId, setLoadingId] = useState(null);
 
-  useEffect(() => {
+  const loadRoutes = () => {
+    setRoutes(null);
+    setError(null);
     fetch("http://localhost:8000/strava/routes")
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.detail || `Server error ${r.status}`);
+        }
+        return r.json();
+      })
       .then(setRoutes)
-      .catch(() => setError("Failed to load routes"));
-  }, []);
+      .catch(e => setError(e.message));
+  };
+
+  useEffect(() => { loadRoutes(); }, []);
 
   const handleSelect = async (route) => {
     setLoadingId(route.id);
@@ -66,7 +76,12 @@ export default function StravaRoutes({ onSelectRoute, onClose }) {
             </div>
           )}
           {error && (
-            <div style={{ color: "#f87171", fontSize: "0.85rem", textAlign: "center", padding: "1rem" }}>{error}</div>
+            <div style={{ textAlign: "center", padding: "1rem" }}>
+              <div style={{ color: "#f87171", fontSize: "0.85rem", marginBottom: "0.75rem" }}>{error}</div>
+              <button onClick={loadRoutes} style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.35rem 0.85rem", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer", fontSize: "0.8rem" }}>
+                <Icon icon="mingcute:refresh-2-line" /> Retry
+              </button>
+            </div>
           )}
           {routes && routes.length === 0 && (
             <div style={{ opacity: 0.5, fontSize: "0.85rem", textAlign: "center", padding: "1rem" }}>No saved routes found</div>
