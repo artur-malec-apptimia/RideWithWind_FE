@@ -1,8 +1,56 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
+import { Icon } from "@iconify/react";
 import { MapContainer, TileLayer, Polyline, Tooltip, CircleMarker, Marker, Pane, ZoomControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import riderIcon from "../assets/RiderIcon.png";
+
+function RainIconOverlay({ positions }) {
+  const map = useMap();
+  const [containerEl, setContainerEl] = useState(null);
+  const elsRef = useRef([]);
+
+  useEffect(() => {
+    const el = document.createElement("div");
+    Object.assign(el.style, { position: "fixed", inset: "0", pointerEvents: "none", overflow: "visible", zIndex: "1000" });
+    document.body.appendChild(el);
+    setContainerEl(el);
+    return () => el.remove();
+  }, [map]);
+
+  useEffect(() => {
+    if (!containerEl) return;
+    const update = () => {
+      const mapRect = map.getContainer().getBoundingClientRect();
+      elsRef.current.forEach((el, i) => {
+        if (!el || !positions[i]) return;
+        const pt = map.latLngToContainerPoint(positions[i]);
+        el.style.left = `${mapRect.left + pt.x}px`;
+        el.style.top = `${mapRect.top + pt.y}px`;
+      });
+    };
+    const hide = () => elsRef.current.forEach(el => el && (el.style.opacity = "0"));
+    const show = () => { update(); elsRef.current.forEach(el => el && (el.style.opacity = "1")); };
+
+    update();
+    map.on("move", update);
+    map.on("zoomstart", hide);
+    map.on("zoomend", show);
+    return () => { map.off("move", update); map.off("zoomstart", hide); map.off("zoomend", show); };
+  }, [map, containerEl, positions]);
+
+  if (!containerEl) return null;
+
+  return positions.map((latlng, i) =>
+    createPortal(
+      <div key={i} ref={el => { elsRef.current[i] = el; }} style={{ position: "absolute", transform: "translate(-50%, -50%)", filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))" }}>
+        <Icon icon="meteocons:raindrops-fill" style={{ fontSize: "4rem", display: "block" }} />
+      </div>,
+      containerEl
+    )
+  );
+}
 
 const BLEND = 12; // points on each side of a boundary used for color blending
 
@@ -85,6 +133,23 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
   const zoom = startWeather ? 12 : 2;
   const polyline = gpxPoints ? gpxPoints.map((p) => [p.lat, p.lon]) : null;
 
+  const rainPolylines = (() => {
+    if (!weatherPoints || !gpxPoints || gpxPoints.length < 2) return [];
+    const RAINY = ["Rain", "Drizzle", "Thunderstorm"];
+    const n = weatherPoints.length;
+    const m = gpxPoints.length;
+    const result = [];
+    for (let wi = 0; wi < n - 1; wi++) {
+      const isRainy = RAINY.includes(weatherPoints[wi].weather?.[0]?.main) ||
+                      RAINY.includes(weatherPoints[wi + 1].weather?.[0]?.main);
+      if (!isRainy) continue;
+      const startIdx = Math.round((wi / (n - 1)) * (m - 1));
+      const endIdx = Math.round(((wi + 1) / (n - 1)) * (m - 1));
+      result.push(gpxPoints.slice(startIdx, endIdx + 1).map(p => [p.lat, p.lon]));
+    }
+    return result;
+  })();
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 0 }}>
       <MapContainer
@@ -99,6 +164,12 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
         <MapUpdater lat={lat} lon={lon} zoom={zoom} gpxPoints={gpxPoints} />
         {polyline && (
           <>
+            {rainPolylines.map((positions, i) => (
+              <Polyline key={`rain-${i}`} positions={positions} pathOptions={{ color: "#60a5fa", weight: 16, opacity: 0.5, interactive: false }} />
+            ))}
+            {rainPolylines.length > 0 && (
+              <RainIconOverlay positions={rainPolylines.map(seg => seg[0])} />
+            )}
             {coloredSegments ? (
               <>
                 {/* Solid base segments */}
