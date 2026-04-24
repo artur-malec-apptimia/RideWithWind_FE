@@ -367,7 +367,7 @@ function App() {
               </div>
             )}
           </div>
-          <ElevationChart points={gpxPoints} coloredSegments={activeSegments} onHover={setHoveredPoint} hoveredPoint={mapHoveredPoint} />
+          <ElevationChart points={gpxPoints} coloredSegments={activeSegments} onHover={setHoveredPoint} hoveredPoint={mapHoveredPoint} weatherPoints={weatherPoints} />
         </div>
       )}
 

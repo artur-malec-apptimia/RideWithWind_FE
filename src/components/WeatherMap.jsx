@@ -23,6 +23,15 @@ function lerpColor(colorA, colorB, t) {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${bl.toString(16).padStart(2, "0")}`;
 }
 
+function etaStr(t, weatherPoints) {
+  const n = weatherPoints.length;
+  const scaled = t * (n - 1);
+  const i = Math.min(Math.floor(scaled), n - 2);
+  const f = scaled - i;
+  const eta = weatherPoints[i]._eta * (1 - f) + weatherPoints[i + 1]._eta * f;
+  return new Date(eta * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function interpolate(t, weatherPoints, getValue) {
   const n = weatherPoints.length;
   const scaled = t * (n - 1);
@@ -98,9 +107,9 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                     ? (seg.startIdx + seg.endIdx) / 2 / (gpxPoints.length - 1)
                     : 0.5;
                   let tooltipText = null;
-                  if (weatherPoints && vizMode === "wind")
+                  if (weatherPoints && vizMode === "wind") {
                     tooltipText = `💨 ${(interpolate(t, weatherPoints, w => w.wind.speed) * 3.6).toFixed(1)} km/h`;
-                  else if (weatherPoints && vizMode === "temp") {
+                  } else if (weatherPoints && vizMode === "temp") {
                     const midIdx = Math.floor((seg.startIdx + (seg.endIdx ?? seg.startIdx)) / 2);
                     const pointEle = gpxPoints?.[midIdx]?.ele ?? null;
                     tooltipText = `🌡️ ${interpolateTemp(t, weatherPoints, pointEle).toFixed(1)}°C`;

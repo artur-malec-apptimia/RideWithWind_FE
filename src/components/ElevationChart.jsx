@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-export default function ElevationChart({ points, coloredSegments, onHover, hoveredPoint }) {
+export default function ElevationChart({ points, coloredSegments, onHover, hoveredPoint, weatherPoints }) {
   const [hoverSi, setHoverSi] = useState(null);
   const [width, setWidth] = useState(300);
   const containerRef = useRef(null);
@@ -115,7 +115,17 @@ export default function ElevationChart({ points, coloredSegments, onHover, hover
         <span style={{ color: "#f87171" }}>↓ {Math.round(loss)} m</span>
         <span style={{ opacity: 0.5 }}>{Math.round(minE)}–{Math.round(maxE)} m</span>
         <span style={{ marginLeft: "auto", visibility: activeSi !== null ? "visible" : "hidden", opacity: 0.7 }}>
-          {activeSi !== null ? `${cumKm[sampledIndices[activeSi]].toFixed(1)} / ${totalKm.toFixed(1)} km` : "\u00a0"}
+          {activeSi !== null ? (() => {
+            const km = `${cumKm[sampledIndices[activeSi]].toFixed(1)} / ${totalKm.toFixed(1)} km`;
+            if (!weatherPoints) return km;
+            const t = sampledIndices[activeSi] / (points.length - 1);
+            const scaled = t * (weatherPoints.length - 1);
+            const wi = Math.min(Math.floor(scaled), weatherPoints.length - 2);
+            const f = scaled - wi;
+            const eta = weatherPoints[wi]._eta * (1 - f) + weatherPoints[wi + 1]._eta * f;
+            const etaStr = new Date(eta * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+            return `${km} · ${etaStr}`;
+          })() : "\u00a0"}
         </span>
       </div>
       <svg width={W} height={H} style={{ display: "block", width: "100%", cursor: "crosshair" }}
