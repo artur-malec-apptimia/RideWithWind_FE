@@ -60,7 +60,16 @@ function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   return null;
 }
 
-export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments, hoveredPoint, vizMode }) {
+function nearestGpxPoint(gpxPoints, latlng) {
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < gpxPoints.length; i++) {
+    const d = (gpxPoints[i].lat - latlng.lat) ** 2 + (gpxPoints[i].lon - latlng.lng) ** 2;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return gpxPoints[best];
+}
+
+export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments, hoveredPoint, vizMode, onHoverPoint }) {
   const startWeather = weatherPoints?.[0];
   const lat = startWeather?.coord.lat ?? 20;
   const lon = startWeather?.coord.lon ?? 0;
@@ -97,7 +106,12 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                     tooltipText = `🌡️ ${interpolateTemp(t, weatherPoints, pointEle).toFixed(1)}°C`;
                   }
                   return (
-                    <Polyline key={i} positions={seg.positions} pathOptions={{ color: seg.color, weight: 4 }}>
+                    <Polyline key={i} positions={seg.positions} pathOptions={{ color: seg.color, weight: 4 }}
+                      eventHandlers={{
+                        mousemove: onHoverPoint ? (e) => onHoverPoint(nearestGpxPoint(gpxPoints, e.latlng)) : undefined,
+                        mouseout: onHoverPoint ? () => onHoverPoint(null) : undefined,
+                      }}
+                    >
                       {tooltipText && (
                         <Tooltip sticky direction="top" offset={[0, -4]} opacity={1} className="wind-tooltip">
                           {tooltipText}

@@ -25,6 +25,7 @@ function App() {
   const [routeAnalysis, setRouteAnalysis] = useState(null);
   const [coloredSegments, setColoredSegments] = useState(null);
   const [hoveredPoint, setHoveredPoint] = useState(null);
+  const [mapHoveredPoint, setMapHoveredPoint] = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
   const [showStravaRoutes, setShowStravaRoutes] = useState(false);
   const [vizMode, setVizMode] = useState("wind"); // "wind" | "temp"
@@ -162,6 +163,7 @@ function App() {
           coloredSegments={activeSegments}
           hoveredPoint={hoveredPoint}
           vizMode={vizMode}
+          onHoverPoint={setMapHoveredPoint}
         />
       ) : (
         <div style={{ position: "fixed", inset: 0, zIndex: 0 }}>
@@ -365,7 +367,7 @@ function App() {
               </div>
             )}
           </div>
-          <ElevationChart points={gpxPoints} coloredSegments={activeSegments} onHover={setHoveredPoint} />
+          <ElevationChart points={gpxPoints} coloredSegments={activeSegments} onHover={setHoveredPoint} hoveredPoint={mapHoveredPoint} />
         </div>
       )}
 

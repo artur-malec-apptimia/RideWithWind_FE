@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-export default function ElevationChart({ points, coloredSegments, onHover }) {
+export default function ElevationChart({ points, coloredSegments, onHover, hoveredPoint }) {
   const [hoverSi, setHoverSi] = useState(null);
   const [width, setWidth] = useState(300);
   const containerRef = useRef(null);
@@ -84,6 +84,17 @@ export default function ElevationChart({ points, coloredSegments, onHover }) {
     }
   }
 
+  // External hover from map polyline
+  let externalSi = null;
+  if (hoverSi === null && hoveredPoint) {
+    const origIdx = points.findIndex(p => p.lat === hoveredPoint.lat && p.lon === hoveredPoint.lon);
+    if (origIdx >= 0) {
+      externalSi = sampledIndices.reduce((best, idx, si) =>
+        Math.abs(idx - origIdx) < Math.abs(sampledIndices[best] - origIdx) ? si : best, 0);
+    }
+  }
+  const activeSi = hoverSi ?? externalSi;
+
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (W / rect.width);
@@ -103,8 +114,8 @@ export default function ElevationChart({ points, coloredSegments, onHover }) {
         <span style={{ color: "#4ade80" }}>↑ {Math.round(gain)} m</span>
         <span style={{ color: "#f87171" }}>↓ {Math.round(loss)} m</span>
         <span style={{ opacity: 0.5 }}>{Math.round(minE)}–{Math.round(maxE)} m</span>
-        <span style={{ marginLeft: "auto", visibility: hoverSi !== null ? "visible" : "hidden", opacity: 0.7 }}>
-          {hoverSi !== null ? `${cumKm[sampledIndices[hoverSi]].toFixed(1)} / ${totalKm.toFixed(1)} km` : "\u00a0"}
+        <span style={{ marginLeft: "auto", visibility: activeSi !== null ? "visible" : "hidden", opacity: 0.7 }}>
+          {activeSi !== null ? `${cumKm[sampledIndices[activeSi]].toFixed(1)} / ${totalKm.toFixed(1)} km` : "\u00a0"}
         </span>
       </div>
       <svg width={W} height={H} style={{ display: "block", width: "100%", cursor: "crosshair" }}
@@ -150,16 +161,16 @@ export default function ElevationChart({ points, coloredSegments, onHover }) {
         <text x={PL - 3} y={PT + iH + 1} textAnchor="end" fill="rgba(255,255,255,0.45)" fontSize="9">{Math.round(minE)}</text>
         <text x={PL} y={H} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9">Start</text>
         <text x={PL + iW} y={H} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9">End</text>
-        {hoverSi !== null && (() => {
-          const hx = toX(hoverSi);
-          const hy = toY(sampled[hoverSi]);
-          const labelAnchor = hoverSi > sampled.length * 0.8 ? "end" : "middle";
+        {activeSi !== null && (() => {
+          const hx = toX(activeSi);
+          const hy = toY(sampled[activeSi]);
+          const labelAnchor = activeSi > sampled.length * 0.8 ? "end" : "middle";
           return (
             <>
               <line x1={hx} y1={PT} x2={hx} y2={PT + iH} stroke="rgba(255,255,255,0.35)" strokeWidth="1" strokeDasharray="2,2" />
               <circle cx={hx} cy={hy} r="3" fill="#fff" stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
               <text x={hx} y={Math.max(PT + 9, hy - 5)} textAnchor={labelAnchor} fill="#fff" fontSize="9" fontWeight="600">
-                {Math.round(sampled[hoverSi])}m
+                {Math.round(sampled[activeSi])}m
               </text>
             </>
           );
