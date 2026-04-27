@@ -6,7 +6,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import riderIcon from "../assets/RiderIcon.png";
 
-function RainIconOverlay({ positions }) {
+function WeatherIconOverlay({ positions, icon }) {
   const map = useMap();
   const [containerEl, setContainerEl] = useState(null);
   const elsRef = useRef([]);
@@ -45,7 +45,7 @@ function RainIconOverlay({ positions }) {
   return positions.map((latlng, i) =>
     createPortal(
       <div key={i} ref={el => { elsRef.current[i] = el; }} style={{ position: "absolute", transform: "translate(-50%, -50%)", filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))" }}>
-        <Icon icon="meteocons:raindrops-fill" style={{ fontSize: "4rem", display: "block" }} />
+        <Icon icon={icon} style={{ fontSize: "4rem", display: "block" }} />
       </div>,
       containerEl
     )
@@ -150,6 +150,22 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
     return result;
   })();
 
+  const snowPolylines = (() => {
+    if (!weatherPoints || !gpxPoints || gpxPoints.length < 2) return [];
+    const n = weatherPoints.length;
+    const m = gpxPoints.length;
+    const result = [];
+    for (let wi = 0; wi < n - 1; wi++) {
+      const isSnowy = weatherPoints[wi].weather?.[0]?.main === "Snow" ||
+                      weatherPoints[wi + 1].weather?.[0]?.main === "Snow";
+      if (!isSnowy) continue;
+      const startIdx = Math.round((wi / (n - 1)) * (m - 1));
+      const endIdx = Math.round(((wi + 1) / (n - 1)) * (m - 1));
+      result.push(gpxPoints.slice(startIdx, endIdx + 1).map(p => [p.lat, p.lon]));
+    }
+    return result;
+  })();
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 0 }}>
       <MapContainer
@@ -168,7 +184,13 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
               <Polyline key={`rain-${i}`} positions={positions} pathOptions={{ color: "#60a5fa", weight: 16, opacity: 0.5, interactive: false }} />
             ))}
             {rainPolylines.length > 0 && (
-              <RainIconOverlay positions={rainPolylines.map(seg => seg[0])} />
+              <WeatherIconOverlay positions={rainPolylines.map(seg => seg[0])} icon="meteocons:raindrops-fill" />
+            )}
+            {snowPolylines.map((positions, i) => (
+              <Polyline key={`snow-${i}`} positions={positions} pathOptions={{ color: "#60a5fa", weight: 16, opacity: 0.5, interactive: false }} />
+            ))}
+            {snowPolylines.length > 0 && (
+              <WeatherIconOverlay positions={snowPolylines.map(seg => seg[0])} icon="meteocons:snowflake-fill" />
             )}
             {coloredSegments ? (
               <>
