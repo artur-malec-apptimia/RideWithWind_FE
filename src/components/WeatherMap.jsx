@@ -1,56 +1,25 @@
-import { useEffect, useState, useRef } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
 import { MapContainer, TileLayer, Polyline, Tooltip, CircleMarker, Marker, Pane, ZoomControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import riderIcon from "../assets/RiderIcon.png";
 
-function WeatherIconOverlay({ positions, icon }) {
-  const map = useMap();
-  const [containerEl, setContainerEl] = useState(null);
-  const elsRef = useRef([]);
-
-  useEffect(() => {
-    const el = document.createElement("div");
-    Object.assign(el.style, { position: "fixed", inset: "0", pointerEvents: "none", overflow: "visible", zIndex: "1000" });
-    document.body.appendChild(el);
-    setContainerEl(el);
-    return () => el.remove();
-  }, [map]);
-
-  useEffect(() => {
-    if (!containerEl) return;
-    const update = () => {
-      const mapRect = map.getContainer().getBoundingClientRect();
-      elsRef.current.forEach((el, i) => {
-        if (!el || !positions[i]) return;
-        const pt = map.latLngToContainerPoint(positions[i]);
-        el.style.left = `${mapRect.left + pt.x}px`;
-        el.style.top = `${mapRect.top + pt.y}px`;
-      });
-    };
-    const hide = () => elsRef.current.forEach(el => el && (el.style.opacity = "0"));
-    const show = () => { update(); elsRef.current.forEach(el => el && (el.style.opacity = "1")); };
-
-    update();
-    map.on("move", update);
-    map.on("zoomstart", hide);
-    map.on("zoomend", show);
-    return () => { map.off("move", update); map.off("zoomstart", hide); map.off("zoomend", show); };
-  }, [map, containerEl, positions]);
-
-  if (!containerEl) return null;
-
-  return positions.map((latlng, i) =>
-    createPortal(
-      <div key={i} ref={el => { elsRef.current[i] = el; }} style={{ position: "absolute", transform: "translate(-50%, -50%)", filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))" }}>
-        <Icon icon={icon} style={{ fontSize: "4rem", display: "block" }} />
-      </div>,
-      containerEl
-    )
-  );
+function makePrecipIcon(iconName) {
+  const src = `https://api.iconify.design/${iconName.replace(":", "/")}.svg`;
+  return L.divIcon({
+    className: "",
+    html: `<img src="${src}" width="64" height="64" style="display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))" />`,
+    iconSize: [64, 64],
+    iconAnchor: [32, 80],
+  });
 }
+
+const PRECIP_ICONS = {
+  rainHeavy: makePrecipIcon("meteocons:raindrops-fill"),
+  rainLight:  makePrecipIcon("meteocons:raindrop-fill"),
+  snow:       makePrecipIcon("meteocons:snowflake-fill"),
+};
 
 const BLEND = 12; // points on each side of a boundary used for color blending
 
@@ -105,6 +74,7 @@ function interpolateTemp(t, weatherPoints, pointEle) {
   return baseTemp;
 }
 
+
 function MapUpdater({ lat, lon, zoom, gpxPoints }) {
   const map = useMap();
   useEffect(() => {
@@ -127,6 +97,7 @@ function nearestGpxPoint(gpxPoints, latlng) {
 }
 
 export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, coloredSegments, hoveredPoint, vizMode, onHoverPoint }) {
+
   const startWeather = weatherPoints?.[0];
   const lat = startWeather?.coord.lat ?? 20;
   const lon = startWeather?.coord.lon ?? 0;
@@ -140,12 +111,13 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
     const m = gpxPoints.length;
     const result = [];
     for (let wi = 0; wi < n - 1; wi++) {
-      const isRainy = RAINY.includes(weatherPoints[wi].weather?.[0]?.main) ||
-                      RAINY.includes(weatherPoints[wi + 1].weather?.[0]?.main);
+      const w0 = weatherPoints[wi], w1 = weatherPoints[wi + 1];
+      const isRainy = RAINY.includes(w0.weather?.[0]?.main) || RAINY.includes(w1.weather?.[0]?.main);
       if (!isRainy) continue;
+      const mm = ((w0.rain?.["1h"] ?? w0.rain?.["3h"] ?? 0) + (w1.rain?.["1h"] ?? w1.rain?.["3h"] ?? 0)) / 2;
       const startIdx = Math.round((wi / (n - 1)) * (m - 1));
       const endIdx = Math.round(((wi + 1) / (n - 1)) * (m - 1));
-      result.push(gpxPoints.slice(startIdx, endIdx + 1).map(p => [p.lat, p.lon]));
+      result.push({ positions: gpxPoints.slice(startIdx, endIdx + 1).map(p => [p.lat, p.lon]), heavy: mm >= 1 });
     }
     return result;
   })();
@@ -156,12 +128,13 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
     const m = gpxPoints.length;
     const result = [];
     for (let wi = 0; wi < n - 1; wi++) {
-      const isSnowy = weatherPoints[wi].weather?.[0]?.main === "Snow" ||
-                      weatherPoints[wi + 1].weather?.[0]?.main === "Snow";
+      const w0 = weatherPoints[wi], w1 = weatherPoints[wi + 1];
+      const isSnowy = w0.weather?.[0]?.main === "Snow" || w1.weather?.[0]?.main === "Snow";
       if (!isSnowy) continue;
       const startIdx = Math.round((wi / (n - 1)) * (m - 1));
       const endIdx = Math.round(((wi + 1) / (n - 1)) * (m - 1));
-      result.push(gpxPoints.slice(startIdx, endIdx + 1).map(p => [p.lat, p.lon]));
+      const mm = ((w0.snow?.["1h"] ?? w0.snow?.["3h"] ?? 0) + (w1.snow?.["1h"] ?? w1.snow?.["3h"] ?? 0)) / 2;
+      result.push({ positions: gpxPoints.slice(startIdx, endIdx + 1).map(p => [p.lat, p.lon]), heavy: mm >= 1 });
     }
     return result;
   })();
@@ -180,18 +153,25 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
         <MapUpdater lat={lat} lon={lon} zoom={zoom} gpxPoints={gpxPoints} />
         {polyline && (
           <>
-            {rainPolylines.map((positions, i) => (
-              <Polyline key={`rain-${i}`} positions={positions} pathOptions={{ color: "#60a5fa", weight: 16, opacity: 0.5, interactive: false }} />
-            ))}
-            {rainPolylines.length > 0 && (
-              <WeatherIconOverlay positions={rainPolylines.map(seg => seg[0])} icon="meteocons:raindrops-fill" />
-            )}
-            {snowPolylines.map((positions, i) => (
-              <Polyline key={`snow-${i}`} positions={positions} pathOptions={{ color: "#60a5fa", weight: 16, opacity: 0.5, interactive: false }} />
-            ))}
-            {snowPolylines.length > 0 && (
-              <WeatherIconOverlay positions={snowPolylines.map(seg => seg[0])} icon="meteocons:snowflake-fill" />
-            )}
+            <Pane name="precip-underlay" style={{ zIndex: 390 }}>
+              {rainPolylines.map((seg, i) => (
+                <Polyline key={`rain-${i}`} positions={seg.positions} pathOptions={{ color: "#60a5fa", weight: 16, opacity: 0.5, interactive: false }} />
+              ))}
+              {snowPolylines.map((seg, i) => (
+                <Polyline key={`snow-${i}`} positions={seg.positions} pathOptions={{ color: "#60a5fa", weight: 16, opacity: 0.5, interactive: false }} />
+              ))}
+            </Pane>
+            <Pane name="precip-icons" style={{ zIndex: 580 }}>
+              {rainPolylines.filter(s => s.heavy).map((seg, i) => (
+                <Marker key={`rain-heavy-icon-${i}`} position={seg.positions[0]} icon={PRECIP_ICONS.rainHeavy} />
+              ))}
+              {rainPolylines.filter(s => !s.heavy).map((seg, i) => (
+                <Marker key={`rain-light-icon-${i}`} position={seg.positions[0]} icon={PRECIP_ICONS.rainLight} />
+              ))}
+              {snowPolylines.map((seg, i) => (
+                <Marker key={`snow-icon-${i}`} position={seg.positions[0]} icon={PRECIP_ICONS.snow} />
+              ))}
+            </Pane>
             {coloredSegments ? (
               <>
                 {/* Solid base segments */}
@@ -207,6 +187,15 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                     const pointEle = gpxPoints?.[midIdx]?.ele ?? null;
                     tooltipText = `🌡️ ${interpolateTemp(t, weatherPoints, pointEle).toFixed(1)}°C`;
                   }
+                  const rainMm = weatherPoints ? interpolate(t, weatherPoints, w => w.rain?.["1h"] ?? w.rain?.["3h"] ?? 0) : 0;
+                  const snowMm = weatherPoints ? interpolate(t, weatherPoints, w => w.snow?.["1h"] ?? w.snow?.["3h"] ?? 0) : 0;
+                  const tooltipContent = tooltipText && (
+                    <div>
+                      <div>{tooltipText}</div>
+                      {rainMm > 0 && <div>🌧️ {rainMm.toFixed(1)} mm</div>}
+                      {snowMm > 0 && <div>❄️ {snowMm.toFixed(1)} mm</div>}
+                    </div>
+                  );
                   return (
                     <Polyline key={i} positions={seg.positions} pathOptions={{ color: seg.color, weight: 4 }}
                       eventHandlers={{
@@ -214,9 +203,9 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                         mouseout: onHoverPoint ? () => onHoverPoint(null) : undefined,
                       }}
                     >
-                      {tooltipText && (
+                      {tooltipContent && (
                         <Tooltip sticky direction="top" offset={[0, -4]} opacity={1} className="wind-tooltip">
-                          {tooltipText}
+                          {tooltipContent}
                         </Tooltip>
                       )}
                     </Polyline>
@@ -275,8 +264,18 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                 tooltipText = `💨 ${(interpolate(t, weatherPoints, w => w.wind.speed) * 3.6).toFixed(1)} km/h`;
               else
                 tooltipText = `🌡️ ${interpolateTemp(t, weatherPoints, gpxPoints[idx]?.ele ?? null).toFixed(1)}°C`;
+              const rainMm = interpolate(t, weatherPoints, w => w.rain?.["1h"] ?? w.rain?.["3h"] ?? 0);
+              const snowMm = interpolate(t, weatherPoints, w => w.snow?.["1h"] ?? w.snow?.["3h"] ?? 0);
+              tooltipText = { main: tooltipText, rain: rainMm > 0 ? `🌧️ ${rainMm.toFixed(1)} mm` : null, snow: snowMm > 0 ? `❄️ ${snowMm.toFixed(1)} mm` : null };
             }
           }
+          const tooltipContent = tooltipText && (
+            <div>
+              <div>{tooltipText.main}</div>
+              {tooltipText.rain && <div>{tooltipText.rain}</div>}
+              {tooltipText.snow && <div>{tooltipText.snow}</div>}
+            </div>
+          );
           return (
             <Marker
               position={[hoveredPoint.lat, hoveredPoint.lon]}
@@ -286,9 +285,9 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                 iconAnchor: [20, 20],
               })}
             >
-              {tooltipText && (
+              {tooltipContent && (
                 <Tooltip permanent direction="top" offset={[0, -34]} opacity={1} className="wind-tooltip">
-                  {tooltipText}
+                  {tooltipContent}
                 </Tooltip>
               )}
             </Marker>
