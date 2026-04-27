@@ -9,7 +9,7 @@ export default function StravaRoutes({ onSelectRoute, onClose }) {
   const loadRoutes = () => {
     setRoutes(null);
     setError(null);
-    fetch("http://localhost:8000/strava/routes")
+    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/strava/routes`)
       .then(async r => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}));
@@ -27,7 +27,7 @@ export default function StravaRoutes({ onSelectRoute, onClose }) {
     setLoadingId(route.id);
     setError(null);
     try {
-      const res = await fetch(`http://localhost:8000/strava/routes/${route.id}/points`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/strava/routes/${route.id}/points`);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const points = await res.json();
       if (!Array.isArray(points) || points.length < 2) throw new Error("Route has no GPS data");

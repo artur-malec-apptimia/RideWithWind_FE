@@ -239,7 +239,7 @@ function App() {
             </button>
           ) : (
             <a
-              href="http://localhost:8000/strava/auth"
+              href={`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/strava/auth`}
               style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0 1rem", height: "34px", border: "1px solid rgba(252,76,2,0.6)", borderRadius: "6px", background: "rgba(252,76,2,0.12)", color: "#fc4c02", textDecoration: "none", fontSize: "0.85rem", fontWeight: 600 }}
             >
               <Icon icon="simple-icons:strava" />
