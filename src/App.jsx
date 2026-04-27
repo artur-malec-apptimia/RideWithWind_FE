@@ -229,7 +229,7 @@ function App() {
             {gpxFileName || "Upload .gpx file"}
             <input type="file" accept=".gpx" onChange={handleGpxUpload} style={{ display: "none" }} />
           </label>
-          {stravaConnected ? (
+          {import.meta.env.DEV && (stravaConnected ? (
             <button
               onClick={() => setShowStravaRoutes(true)}
               style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0 1rem", height: "34px", border: "1px solid rgba(252,76,2,0.6)", borderRadius: "6px", background: "rgba(252,76,2,0.12)", color: "#fc4c02", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}
@@ -245,7 +245,7 @@ function App() {
               <Icon icon="simple-icons:strava" />
               Connect Strava
             </a>
-          )}
+          ))}
           {!weatherPoints ? (
             <button
               disabled={!gpxPoints || loading}
@@ -266,7 +266,7 @@ function App() {
             </button>
           )}
         </div>
-        {stravaConnected && (
+        {import.meta.env.DEV && stravaConnected && (
           <div style={{ marginTop: "0.5rem" }}>
             <button onClick={handleDisconnectStrava} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", fontSize: "0.72rem", cursor: "pointer", textDecoration: "underline" }}>
               Disconnect Strava
@@ -383,7 +383,7 @@ function App() {
         />
       )}
 
-      {showStravaRoutes && (
+      {import.meta.env.DEV && showStravaRoutes && (
         <StravaRoutes
           onSelectRoute={handleStravaRouteSelect}
           onClose={() => setShowStravaRoutes(false)}
