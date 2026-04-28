@@ -9,7 +9,8 @@
       "WebFetch(domain:api.iconify.design)",
       "WebFetch(domain:iconify.design)",
       "WebFetch(domain:github.com)",
-      "Bash(ls C:/weather-app/*.py)"
+      "Bash(ls C:/weather-app/*.py)",
+      "Bash(python:*)"
     ]
   }
 }

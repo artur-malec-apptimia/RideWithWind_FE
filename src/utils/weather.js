@@ -1,4 +1,9 @@
-export function getWeatherIcon(iconCode) {
+const RAIN_ICON_CODES = new Set(["09d", "09n", "10d", "10n"]);
+
+export function getWeatherIcon(iconCode, rainMm = 0) {
+  if (RAIN_ICON_CODES.has(iconCode)) {
+    return rainMm >= 1 ? "meteocons:raindrops-fill" : "meteocons:raindrop-fill";
+  }
   const icons = {
     // Clear
     "01d": "meteocons:clear-day-fill",
@@ -12,12 +17,6 @@ export function getWeatherIcon(iconCode) {
     // Broken clouds
     "04d": "meteocons:overcast-day-fill",
     "04n": "meteocons:overcast-night-fill",
-    // Shower rain
-    "09d": "meteocons:overcast-drizzle-fill",
-    "09n": "meteocons:overcast-drizzle-fill",
-    // Rain
-    "10d": "meteocons:raindrops-fill",
-    "10n": "meteocons:raindrops",
     // Thunderstorm
     "11d": "meteocons:thunderstorms-day-fill",
     "11n": "meteocons:thunderstorms-night-fill",
