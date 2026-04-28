@@ -113,8 +113,8 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
     for (let wi = 0; wi < n - 1; wi++) {
       const w0 = weatherPoints[wi], w1 = weatherPoints[wi + 1];
       const isRainy = RAINY.includes(w0.weather?.[0]?.main) || RAINY.includes(w1.weather?.[0]?.main);
-      if (!isRainy) continue;
       const mm = ((w0.rain?.["1h"] ?? w0.rain?.["3h"] ?? 0) + (w1.rain?.["1h"] ?? w1.rain?.["3h"] ?? 0)) / 2;
+      if (!isRainy || mm <= 0) continue;
       const startIdx = Math.round((wi / (n - 1)) * (m - 1));
       const endIdx = Math.round(((wi + 1) / (n - 1)) * (m - 1));
       result.push({ positions: gpxPoints.slice(startIdx, endIdx + 1).map(p => [p.lat, p.lon]), heavy: mm >= 1 });
@@ -130,10 +130,10 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
     for (let wi = 0; wi < n - 1; wi++) {
       const w0 = weatherPoints[wi], w1 = weatherPoints[wi + 1];
       const isSnowy = w0.weather?.[0]?.main === "Snow" || w1.weather?.[0]?.main === "Snow";
-      if (!isSnowy) continue;
+      const mm = ((w0.snow?.["1h"] ?? w0.snow?.["3h"] ?? 0) + (w1.snow?.["1h"] ?? w1.snow?.["3h"] ?? 0)) / 2;
+      if (!isSnowy || mm <= 0) continue;
       const startIdx = Math.round((wi / (n - 1)) * (m - 1));
       const endIdx = Math.round(((wi + 1) / (n - 1)) * (m - 1));
-      const mm = ((w0.snow?.["1h"] ?? w0.snow?.["3h"] ?? 0) + (w1.snow?.["1h"] ?? w1.snow?.["3h"] ?? 0)) / 2;
       result.push({ positions: gpxPoints.slice(startIdx, endIdx + 1).map(p => [p.lat, p.lon]), heavy: mm >= 1 });
     }
     return result;
@@ -187,13 +187,15 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                     const pointEle = gpxPoints?.[midIdx]?.ele ?? null;
                     tooltipText = `🌡️ ${interpolateTemp(t, weatherPoints, pointEle).toFixed(1)}°C`;
                   }
+                  const RAINY = ["Rain", "Drizzle", "Thunderstorm"];
+                  const nearestWp = weatherPoints ? weatherPoints[Math.round(t * (weatherPoints.length - 1))] : null;
                   const rainMm = weatherPoints ? interpolate(t, weatherPoints, w => w.rain?.["1h"] ?? w.rain?.["3h"] ?? 0) : 0;
                   const snowMm = weatherPoints ? interpolate(t, weatherPoints, w => w.snow?.["1h"] ?? w.snow?.["3h"] ?? 0) : 0;
                   const tooltipContent = tooltipText && (
                     <div>
                       <div>{tooltipText}</div>
-                      {rainMm > 0 && <div>🌧️ {rainMm.toFixed(1)} mm</div>}
-                      {snowMm > 0 && <div>❄️ {snowMm.toFixed(1)} mm</div>}
+                      {RAINY.includes(nearestWp?.weather?.[0]?.main) && rainMm > 0 && <div>🌧️ {rainMm.toFixed(1)} mm</div>}
+                      {nearestWp?.weather?.[0]?.main === "Snow" && snowMm > 0 && <div>❄️ {snowMm.toFixed(1)} mm</div>}
                     </div>
                   );
                   return (
@@ -264,9 +266,11 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                 tooltipText = `💨 ${(interpolate(t, weatherPoints, w => w.wind.speed) * 3.6).toFixed(1)} km/h`;
               else
                 tooltipText = `🌡️ ${interpolateTemp(t, weatherPoints, gpxPoints[idx]?.ele ?? null).toFixed(1)}°C`;
+              const RAINY = ["Rain", "Drizzle", "Thunderstorm"];
+              const nearestWp = weatherPoints[Math.round(t * (weatherPoints.length - 1))];
               const rainMm = interpolate(t, weatherPoints, w => w.rain?.["1h"] ?? w.rain?.["3h"] ?? 0);
               const snowMm = interpolate(t, weatherPoints, w => w.snow?.["1h"] ?? w.snow?.["3h"] ?? 0);
-              tooltipText = { main: tooltipText, rain: rainMm > 0 ? `🌧️ ${rainMm.toFixed(1)} mm` : null, snow: snowMm > 0 ? `❄️ ${snowMm.toFixed(1)} mm` : null };
+              tooltipText = { main: tooltipText, rain: RAINY.includes(nearestWp?.weather?.[0]?.main) && rainMm > 0 ? `🌧️ ${rainMm.toFixed(1)} mm` : null, snow: nearestWp?.weather?.[0]?.main === "Snow" && snowMm > 0 ? `❄️ ${snowMm.toFixed(1)} mm` : null };
             }
           }
           const tooltipContent = tooltipText && (
