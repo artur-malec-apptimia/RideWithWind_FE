@@ -116,8 +116,12 @@ export default function WeatherPanel({
           type="number"
           min="1"
           max="100"
+          step="0.1"
           value={speedInput}
-          onChange={(e) => setSpeedInput(e.target.value)}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (/^\d*\.?\d{0,1}$/.test(val)) setSpeedInput(val);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && gpxPoints) {
               const parsed = parseFloat(speedInput);
