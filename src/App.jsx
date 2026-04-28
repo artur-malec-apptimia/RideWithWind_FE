@@ -159,7 +159,9 @@ function App() {
   const checkpoints = weatherPoints
     ? [
         { label: "Start",  w: weatherPoints[0] },
-        { label: "Mid",    w: weatherPoints[Math.floor((weatherPoints.length - 1) / 2)] },
+        ...(weatherPoints.length >= 3
+          ? [{ label: "Mid", w: weatherPoints[Math.floor((weatherPoints.length - 1) / 2)] }]
+          : []),
         { label: "Finish", w: weatherPoints[weatherPoints.length - 1] },
       ]
     : [];
