@@ -109,43 +109,54 @@ export default function WeatherPanel({
         ))}
       </div>
       {/* Speed input */}
-      <div style={{ marginTop: "0.75rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
-        <Icon icon="mingcute:bike-line" style={{ opacity: 0.6 }} />
-        <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>Avg speed</span>
-        <input
-          type="number"
-          min="1"
-          max="100"
-          step="0.1"
-          value={speedInput}
-          onChange={(e) => {
-            const val = e.target.value;
-            if (/^\d*\.?\d{0,1}$/.test(val)) setSpeedInput(val);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && gpxPoints) {
+      <div style={{ marginTop: "0.75rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+          <Icon icon="mingcute:bike-line" style={{ opacity: 0.6 }} />
+          <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>Avg speed</span>
+          <input
+            type="number"
+            min="10"
+            max="50"
+            step="0.1"
+            value={speedInput}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (/^\d*\.?\d{0,1}$/.test(val)) setSpeedInput(val);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && gpxPoints) {
+                const parsed = parseFloat(speedInput);
+                if (!parsed || parsed < 10 || parsed > 50) return;
+                setAvgSpeed(parsed);
+                fetchWeatherForRoute(gpxPoints, parsed, getStartUnix());
+              }
+            }}
+            style={{ width: "64px", background: "rgba(255,255,255,0.08)", border: `1px solid ${(() => { const p = parseFloat(speedInput); return speedInput && (p < 10 || p > 50) ? "rgba(248,113,113,0.7)" : "rgba(255,255,255,0.2)"; })()}`, borderRadius: "4px", outline: "none", color: "#fff", fontSize: "0.9rem", textAlign: "center", padding: "0.15rem 0.2rem" }}
+          />
+          <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>km/h</span>
+          <button
+            onClick={() => {
               const parsed = parseFloat(speedInput);
-              if (!parsed || parsed <= 0) return;
+              if (!parsed || parsed < 10 || parsed > 50) return;
               setAvgSpeed(parsed);
               fetchWeatherForRoute(gpxPoints, parsed, getStartUnix());
-            }
-          }}
-          style={{ width: "64px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", outline: "none", color: "#fff", fontSize: "0.9rem", textAlign: "center", padding: "0.15rem 0.2rem" }}
-        />
-        <span style={{ fontSize: "0.8rem", opacity: 0.6 }}>km/h</span>
-        <button
-          onClick={() => {
-            const parsed = parseFloat(speedInput);
-            if (!parsed || parsed <= 0) return;
-            setAvgSpeed(parsed);
-            fetchWeatherForRoute(gpxPoints, parsed, getStartUnix());
-          }}
-          disabled={loading}
-          title="Refresh with new speed"
-          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", color: "#fff", cursor: loading ? "not-allowed" : "pointer", padding: "0.2rem 0.35rem", fontSize: "0.85rem", lineHeight: 1 }}
-        >
-          <Icon icon="mingcute:refresh-2-line" />
-        </button>
+            }}
+            disabled={loading}
+            title="Refresh with new speed"
+            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", color: "#fff", cursor: loading ? "not-allowed" : "pointer", padding: "0.2rem 0.35rem", fontSize: "0.85rem", lineHeight: 1 }}
+          >
+            <Icon icon="mingcute:refresh-2-line" />
+          </button>
+        </div>
+        {(() => {
+          const p = parseFloat(speedInput);
+          if (!speedInput || (!isNaN(p) && p >= 10 && p <= 50)) return null;
+          return (
+            <div style={{ textAlign: "center", fontSize: "0.72rem", color: "#f87171", marginTop: "0.35rem" }}>
+              Speed must be between 10 and 50 km/h
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
