@@ -135,7 +135,7 @@ function App() {
   let relativeWindLabel = null;
   let hoveredWindSpeed = null;
   if (hoveredPoint && gpxPoints && weatherPoints) {
-    const idx = gpxPoints.findIndex(p => p.lat === hoveredPoint.lat && p.lon === hoveredPoint.lon);
+    const idx = gpxPoints.findIndex(p => p === hoveredPoint);
     if (idx >= 0) {
       const prev = gpxPoints[Math.max(0, idx - 1)];
       const next = gpxPoints[Math.min(gpxPoints.length - 1, idx + 1)];

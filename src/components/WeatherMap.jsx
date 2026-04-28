@@ -91,7 +91,7 @@ function nearestGpxPoint(gpxPoints, latlng) {
   let best = 0, bestD = Infinity;
   for (let i = 0; i < gpxPoints.length; i++) {
     const d = (gpxPoints[i].lat - latlng.lat) ** 2 + (gpxPoints[i].lon - latlng.lng) ** 2;
-    if (d < bestD) { bestD = d; best = i; }
+    if (d <= bestD) { bestD = d; best = i; }
   }
   return gpxPoints[best];
 }
@@ -259,7 +259,7 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
         {hoveredPoint && (() => {
           let tooltipText = null;
           if (weatherPoints && gpxPoints) {
-            const idx = gpxPoints.findIndex(p => p.lat === hoveredPoint.lat && p.lon === hoveredPoint.lon);
+            const idx = gpxPoints.findIndex(p => p === hoveredPoint);
             if (idx >= 0) {
               const t = idx / (gpxPoints.length - 1);
               if (vizMode === "wind")

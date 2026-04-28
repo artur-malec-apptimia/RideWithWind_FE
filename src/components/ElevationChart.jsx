@@ -87,7 +87,7 @@ export default function ElevationChart({ points, coloredSegments, onHover, hover
   // External hover from map polyline
   let externalSi = null;
   if (hoverSi === null && hoveredPoint) {
-    const origIdx = points.findIndex(p => p.lat === hoveredPoint.lat && p.lon === hoveredPoint.lon);
+    const origIdx = points.findIndex(p => p === hoveredPoint);
     if (origIdx >= 0) {
       externalSi = sampledIndices.reduce((best, idx, si) =>
         Math.abs(idx - origIdx) < Math.abs(sampledIndices[best] - origIdx) ? si : best, 0);
