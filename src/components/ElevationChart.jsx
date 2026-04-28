@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-export default function ElevationChart({ points, coloredSegments, onHover, hoveredPoint, weatherPoints }) {
+export default function ElevationChart({ points, coloredSegments, onHover, hoveredPoint, weatherPoints, timezone }) {
   const [hoverSi, setHoverSi] = useState(null);
   const [width, setWidth] = useState(300);
   const containerRef = useRef(null);
@@ -123,7 +123,7 @@ export default function ElevationChart({ points, coloredSegments, onHover, hover
             const wi = Math.min(Math.floor(scaled), weatherPoints.length - 2);
             const f = scaled - wi;
             const eta = weatherPoints[wi]._eta * (1 - f) + weatherPoints[wi + 1]._eta * f;
-            const etaStr = new Date(eta * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+            const etaStr = new Date(eta * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false, ...(timezone && { timeZone: timezone }) });
             return `${km} · ${etaStr}`;
           })() : "\u00a0"}
         </span>

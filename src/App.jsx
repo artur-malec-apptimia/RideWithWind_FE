@@ -7,8 +7,8 @@ import ElevationChart from "./components/ElevationChart";
 import WindCompass from "./components/WindCompass";
 import WeatherPanel from "./components/WeatherPanel";
 import StravaRoutes from "./components/StravaRoutes";
-import { parseGPX, fetchRouteWeather, fetchWindAnalysis, fetchColoredSegments, fetchStravaStatus, disconnectStrava } from "./api";
-import { todayStr, nowTimeStr, buildTempColoredSegments } from "./utils/weather";
+import { parseGPX, fetchRouteWeather, fetchWindAnalysis, fetchColoredSegments, fetchStravaStatus, disconnectStrava, fetchTimezone } from "./api";
+import { todayStr, nowTimeStr, buildTempColoredSegments, localTimeToUnix } from "./utils/weather";
 import { panelStyle } from "./styles";
 
 function App() {
@@ -29,13 +29,14 @@ function App() {
   const [stravaConnected, setStravaConnected] = useState(false);
   const [showStravaRoutes, setShowStravaRoutes] = useState(false);
   const [vizMode, setVizMode] = useState("wind"); // "wind" | "temp"
+  const [routeTimezone, setRouteTimezone] = useState(null);
 
   useEffect(() => {
     fetchStravaStatus().then(({ connected }) => setStravaConnected(connected));
   }, []);
 
   const getStartUnix = (date = startDate, time = startTime) =>
-    Math.floor(new Date(`${date}T${time}`).getTime() / 1000);
+    localTimeToUnix(date, time, routeTimezone);
 
   const handleFetchWeather = async (points, speedKmh = avgSpeed, startUnix) => {
     setLoading(true);
@@ -59,14 +60,21 @@ function App() {
     }
   };
 
-  const handleStravaRouteSelect = (points, routeName) => {
+  const handleStravaRouteSelect = async (points, routeName) => {
     setShowStravaRoutes(false); // only called after successful points fetch
     setGpxFileName(routeName);
-    setGpxPoints(points.length > 1 ? points : null);
     setWeatherPoints(null);
     setGpxMidPoint(null);
     setRouteAnalysis(null);
     setColoredSegments(null);
+    if (points.length > 1) {
+      setGpxPoints(points);
+      const tz = await fetchTimezone(points[0].lat, points[0].lon);
+      setRouteTimezone(tz);
+    } else {
+      setGpxPoints(null);
+      setRouteTimezone(null);
+    }
   };
 
   const handleDisconnectStrava = async () => {
@@ -85,7 +93,14 @@ function App() {
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const points = await parseGPX(ev.target.result);
-      setGpxPoints(points.length > 1 ? points : null);
+      if (points.length > 1) {
+        setGpxPoints(points);
+        const tz = await fetchTimezone(points[0].lat, points[0].lon);
+        setRouteTimezone(tz);
+      } else {
+        setGpxPoints(null);
+        setRouteTimezone(null);
+      }
     };
     reader.readAsText(file);
   };
@@ -367,7 +382,7 @@ function App() {
               </div>
             )}
           </div>
-          <ElevationChart points={gpxPoints} coloredSegments={activeSegments} onHover={setHoveredPoint} hoveredPoint={mapHoveredPoint} weatherPoints={weatherPoints} />
+          <ElevationChart points={gpxPoints} coloredSegments={activeSegments} onHover={setHoveredPoint} hoveredPoint={mapHoveredPoint} weatherPoints={weatherPoints} timezone={routeTimezone} />
         </div>
       )}
 

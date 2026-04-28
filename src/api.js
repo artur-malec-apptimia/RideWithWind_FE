@@ -37,6 +37,13 @@ export async function fetchColoredSegments(points, windDegrees) {
   return res.json();
 }
 
+export async function fetchTimezone(lat, lon) {
+  const res = await fetch(`${BASE}/timezone?lat=${lat}&lon=${lon}`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.timezone ?? null;
+}
+
 // ── Strava ────────────────────────────────────────────────────────────────────
 
 export async function fetchStravaStatus() {

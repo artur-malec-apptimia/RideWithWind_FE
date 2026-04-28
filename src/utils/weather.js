@@ -137,3 +137,24 @@ export function nowTimeStr() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
+
+// Convert date+time entered as local time in `timezone` (IANA) to a Unix timestamp.
+export function localTimeToUnix(dateStr, timeStr, timezone) {
+  if (!timezone) {
+    return Math.floor(new Date(`${dateStr}T${timeStr}`).getTime() / 1000);
+  }
+  // Treat the input as UTC to get a reference point
+  const naiveUtc = new Date(`${dateStr}T${timeStr}:00Z`);
+  // Find what that UTC moment looks like in the target timezone
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(naiveUtc).reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {});
+  const h = parts.hour === "24" ? "00" : parts.hour;
+  const tzAsUtcMs = new Date(`${parts.year}-${parts.month}-${parts.day}T${h}:${parts.minute}:${parts.second}Z`).getTime();
+  // offsetMs: how many ms the timezone is ahead of UTC
+  const offsetMs = naiveUtc.getTime() - tzAsUtcMs;
+  return Math.floor((naiveUtc.getTime() + offsetMs) / 1000);
+}
