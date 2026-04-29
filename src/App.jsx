@@ -359,9 +359,6 @@ function App() {
                   <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
                 </div>
               )}
-              <div style={{ fontSize: "0.85rem", marginBottom: "0.6rem", opacity: 0.8 }}>
-                {routeAnalysis.totalKm.toFixed(2)} km total
-              </div>
               <div style={{ display: "flex", gap: "1.2rem", justifyContent: "center", marginBottom: "0.75rem" }}>
                 {[
                   { label: "Headwind", value: routeAnalysis.headwind, km: routeAnalysis.headwindKm, color: "#e05555" },
