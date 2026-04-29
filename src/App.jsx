@@ -136,6 +136,8 @@ function App() {
     setStartTime(newTime);
   };
 
+  const isPastTime = startDate === todayStr() && startTime < nowTimeStr();
+
   const avgTemp = weatherPoints
     ? weatherPoints.reduce((s, w) => s + w.main.temp, 0) / weatherPoints.length
     : null;
@@ -291,9 +293,9 @@ function App() {
           ))}
           {!weatherPoints ? (
             <button
-              disabled={!gpxPoints || gpxParsing || loading}
+              disabled={!gpxPoints || gpxParsing || loading || isPastTime}
               onClick={() => handleFetchWeather(gpxPoints, avgSpeed, getStartUnix())}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0 1rem", height: "34px", borderRadius: "6px", border: "none", cursor: gpxPoints && !gpxParsing && !loading ? "pointer" : "not-allowed", fontWeight: 600, fontSize: "0.85rem", background: gpxPoints && !gpxParsing && !loading ? "#3b82f6" : "rgba(255,255,255,0.1)", color: gpxPoints && !gpxParsing && !loading ? "#fff" : "rgba(255,255,255,0.35)", transition: "background 0.15s" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0 1rem", height: "34px", borderRadius: "6px", border: "none", cursor: gpxPoints && !gpxParsing && !loading && !isPastTime ? "pointer" : "not-allowed", fontWeight: 600, fontSize: "0.85rem", background: gpxPoints && !gpxParsing && !loading && !isPastTime ? "#3b82f6" : "rgba(255,255,255,0.1)", color: gpxPoints && !gpxParsing && !loading && !isPastTime ? "#fff" : "rgba(255,255,255,0.35)", transition: "background 0.15s" }}
             >
               {gpxParsing
                 ? <span className="spinner" />
@@ -319,6 +321,7 @@ function App() {
             </button>
           </div>
         )}
+        {isPastTime && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "#fbbf24" }}>Start time cannot be in the past</p>}
         {loading && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", opacity: 0.7 }}>Fetching weather and wind data</p>}
         {error && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "#f87171" }}>{error}</p>}
       </div>
