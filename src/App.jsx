@@ -8,7 +8,7 @@ import WindCompass from "./components/WindCompass";
 import WeatherPanel from "./components/WeatherPanel";
 import StravaRoutes from "./components/StravaRoutes";
 import { parseGPX, fetchRouteWeather, fetchWindAnalysis, fetchColoredSegments, fetchStravaStatus, disconnectStrava, fetchTimezone } from "./api";
-import { todayStr, nowTimeStr, buildTempColoredSegments, localTimeToUnix } from "./utils/weather";
+import { todayStr, nowTimeStr, buildTempColoredSegments, localTimeToUnix, getSunTimes } from "./utils/weather";
 import { panelStyle } from "./styles";
 
 function App() {
@@ -31,6 +31,9 @@ function App() {
   const [showStravaRoutes, setShowStravaRoutes] = useState(false);
   const [vizMode, setVizMode] = useState("wind"); // "wind" | "temp"
   const [routeTimezone, setRouteTimezone] = useState(null);
+  const [sunTimes, setSunTimes] = useState(null);
+  const [fetchedStartDate, setFetchedStartDate] = useState(null);
+  const [fetchedStartTime, setFetchedStartTime] = useState(null);
 
   useEffect(() => {
     fetchStravaStatus().then(({ connected }) => setStravaConnected(connected));
@@ -44,6 +47,9 @@ function App() {
     setError(null);
     try {
       const { mid_point, weather_points } = await fetchRouteWeather(points, speedKmh, startUnix);
+      setSunTimes(getSunTimes(points[0].lat, points[0].lon, startDate));
+      setFetchedStartDate(startDate);
+      setFetchedStartTime(startTime);
       setGpxMidPoint(mid_point);
       setWeatherPoints(weather_points);
 
@@ -68,6 +74,9 @@ function App() {
     setGpxMidPoint(null);
     setRouteAnalysis(null);
     setColoredSegments(null);
+    setSunTimes(null);
+    setFetchedStartDate(null);
+    setFetchedStartTime(null);
     if (points.length > 1) {
       setGpxPoints(points);
       const tz = await fetchTimezone(points[0].lat, points[0].lon);
@@ -91,6 +100,11 @@ function App() {
     setGpxMidPoint(null);
     setRouteAnalysis(null);
     setColoredSegments(null);
+    setSunTimes(null);
+    setFetchedStartDate(null);
+    setFetchedStartTime(null);
+    setFetchedStartDate(null);
+    setFetchedStartTime(null);
     setGpxParsing(true);
     const reader = new FileReader();
     reader.onload = async (ev) => {
@@ -320,8 +334,8 @@ function App() {
             avgWindSpeed={avgWindSpeed}
             avgWindGust={avgWindGust}
             checkpoints={checkpoints}
-            startDate={startDate}
-            startTime={startTime}
+            startDate={fetchedStartDate ?? startDate}
+            startTime={fetchedStartTime ?? startTime}
             nowUnixDisplay={nowUnixDisplay}
             speedInput={speedInput}
             setSpeedInput={setSpeedInput}
@@ -330,6 +344,8 @@ function App() {
             gpxPoints={gpxPoints}
             fetchWeatherForRoute={handleFetchWeather}
             getStartUnix={getStartUnix}
+            timezone={routeTimezone}
+            sunTimes={sunTimes}
           />
 
           {/* Wind analysis panel */}

@@ -19,6 +19,8 @@ export default function WeatherPanel({
   gpxPoints,
   fetchWeatherForRoute,
   getStartUnix,
+  timezone,
+  sunTimes,
 }) {
   return (
     <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto" }}>
@@ -59,6 +61,25 @@ export default function WeatherPanel({
           </div>
         )}
       </div>
+      {/* Sunrise / Sunset */}
+      {sunTimes && (() => {
+        const fmt = (unix) => new Date(unix * 1000).toLocaleTimeString([], {
+          hour: "2-digit", minute: "2-digit", hour12: false,
+          ...(timezone && { timeZone: timezone }),
+        });
+        return (
+          <div style={{ display: "flex", gap: "1.5rem", justifyContent: "center", marginBottom: "0.75rem", paddingBottom: "0.65rem", borderBottom: "1px solid rgba(255,255,255,0.1)", fontSize: "0.85rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <Icon icon="meteocons:sunrise-fill" style={{ fontSize: "2.5rem" }} />
+              <span>{fmt(sunTimes.sunrise)}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <Icon icon="meteocons:sunset-fill" style={{ fontSize: "2.5rem" }} />
+              <span>{fmt(sunTimes.sunset)}</span>
+            </div>
+          </div>
+        );
+      })()}
       {/* Checkpoint columns */}
       <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
         {checkpoints.map(({ label, w }) => (
