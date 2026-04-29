@@ -26,6 +26,7 @@ function App() {
   const [coloredSegments, setColoredSegments] = useState(null);
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [mapHoveredPoint, setMapHoveredPoint] = useState(null);
+  const [gpxParsing, setGpxParsing] = useState(false);
   const [stravaConnected, setStravaConnected] = useState(false);
   const [showStravaRoutes, setShowStravaRoutes] = useState(false);
   const [vizMode, setVizMode] = useState("wind"); // "wind" | "temp"
@@ -90,9 +91,19 @@ function App() {
     setGpxMidPoint(null);
     setRouteAnalysis(null);
     setColoredSegments(null);
+    setGpxParsing(true);
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const points = await parseGPX(ev.target.result);
+      const gpxText = ev.target.result;
+      let points = null;
+      while (true) {
+        try {
+          points = await parseGPX(gpxText);
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      }
       if (points.length > 1) {
         setGpxPoints(points);
         const tz = await fetchTimezone(points[0].lat, points[0].lon);
@@ -101,6 +112,7 @@ function App() {
         setGpxPoints(null);
         setRouteTimezone(null);
       }
+      setGpxParsing(false);
     };
     reader.readAsText(file);
   };
@@ -265,11 +277,14 @@ function App() {
           ))}
           {!weatherPoints ? (
             <button
-              disabled={!gpxPoints || loading}
+              disabled={!gpxPoints || gpxParsing || loading}
               onClick={() => handleFetchWeather(gpxPoints, avgSpeed, getStartUnix())}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0 1rem", height: "34px", borderRadius: "6px", border: "none", cursor: gpxPoints && !loading ? "pointer" : "not-allowed", fontWeight: 600, fontSize: "0.85rem", background: gpxPoints && !loading ? "#3b82f6" : "rgba(255,255,255,0.1)", color: gpxPoints && !loading ? "#fff" : "rgba(255,255,255,0.35)", transition: "background 0.15s" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0 1rem", height: "34px", borderRadius: "6px", border: "none", cursor: gpxPoints && !gpxParsing && !loading ? "pointer" : "not-allowed", fontWeight: 600, fontSize: "0.85rem", background: gpxPoints && !gpxParsing && !loading ? "#3b82f6" : "rgba(255,255,255,0.1)", color: gpxPoints && !gpxParsing && !loading ? "#fff" : "rgba(255,255,255,0.35)", transition: "background 0.15s" }}
             >
-              <Icon icon="mingcute:check-line" />
+              {gpxParsing
+                ? <span className="spinner" />
+                : <Icon icon="mingcute:check-line" />
+              }
               Analyze route
             </button>
           ) : (
