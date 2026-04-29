@@ -4,22 +4,18 @@ import { MapContainer, TileLayer, Polyline, Tooltip, CircleMarker, Marker, Pane,
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import riderIcon from "../assets/RiderIcon.png";
+import { getWeatherIcon } from "../utils/weather";
 
-function makePrecipIcon(iconName) {
+
+function makeWeatherIcon(iconName) {
   const src = `https://api.iconify.design/${iconName.replace(":", "/")}.svg`;
   return L.divIcon({
     className: "",
-    html: `<img src="${src}" width="64" height="64" style="display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))" />`,
-    iconSize: [64, 64],
-    iconAnchor: [32, 80],
+    html: `<img src="${src}" width="40" height="40" style="display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))" />`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 50],
   });
 }
-
-const PRECIP_ICONS = {
-  rainHeavy: makePrecipIcon("meteocons:raindrops-fill"),
-  rainLight:  makePrecipIcon("meteocons:raindrop-fill"),
-  snow:       makePrecipIcon("meteocons:snowflake-fill"),
-};
 
 const BLEND = 12; // points on each side of a boundary used for color blending
 
@@ -161,17 +157,6 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                 <Polyline key={`snow-${i}`} positions={seg.positions} pathOptions={{ color: "#60a5fa", weight: 16, opacity: 0.5, interactive: false }} />
               ))}
             </Pane>
-            <Pane name="precip-icons" style={{ zIndex: 580 }}>
-              {rainPolylines.filter(s => s.heavy).map((seg, i) => (
-                <Marker key={`rain-heavy-icon-${i}`} position={seg.positions[0]} icon={PRECIP_ICONS.rainHeavy} />
-              ))}
-              {rainPolylines.filter(s => !s.heavy).map((seg, i) => (
-                <Marker key={`rain-light-icon-${i}`} position={seg.positions[0]} icon={PRECIP_ICONS.rainLight} />
-              ))}
-              {snowPolylines.map((seg, i) => (
-                <Marker key={`snow-icon-${i}`} position={seg.positions[0]} icon={PRECIP_ICONS.snow} />
-              ))}
-            </Pane>
             {coloredSegments ? (
               <>
                 {/* Solid base segments */}
@@ -231,6 +216,17 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
               </>
             ) : (
               <Polyline positions={polyline} pathOptions={{ color: "#555566", weight: 4 }} />
+            )}
+            {weatherPoints && (
+              <Pane name="weather-icons" style={{ zIndex: 440 }}>
+                {weatherPoints.map((w, wi) => {
+                  const gpxIdx = Math.round((wi / (weatherPoints.length - 1)) * (gpxPoints.length - 1));
+                  const pos = [gpxPoints[gpxIdx].lat, gpxPoints[gpxIdx].lon];
+                  const rainMm = w.rain?.["1h"] ?? w.rain?.["3h"] ?? 0;
+                  const icon = getWeatherIcon(w.weather[0].icon, rainMm);
+                  return <Marker key={wi} position={pos} icon={makeWeatherIcon(icon)} interactive={false} />;
+                })}
+              </Pane>
             )}
             <Pane name="route-points" style={{ zIndex: 450 }}>
               <CircleMarker
