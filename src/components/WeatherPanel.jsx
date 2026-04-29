@@ -36,7 +36,14 @@ export default function WeatherPanel({
       <div style={{ display: "flex", gap: "1.2rem", justifyContent: "center", marginBottom: "0.75rem", paddingBottom: "0.65rem", borderBottom: "1px solid rgba(255,255,255,0.1)", fontSize: "0.85rem" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ opacity: 0.6, fontSize: "0.75rem" }}>Avg temp</div>
-          <strong style={{ fontSize: "1.2rem" }}>{avgTemp.toFixed(1)}°C</strong>
+          <strong style={{ fontSize: "1.2rem", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {avgTemp.toFixed(1)}°C
+            {avgTemp > 30
+              ? <Icon icon="meteocons:thermometer-warmer" style={{ fontSize: "1.6rem" }} />
+              : avgTemp < 0
+                ? <Icon icon="meteocons:thermometer-colder" style={{ fontSize: "1.6rem" }} />
+                : null}
+          </strong>
         </div>
         <div style={{ textAlign: "center" }}>
           <div style={{ opacity: 0.6, fontSize: "0.75rem" }}>Avg wind</div>
@@ -94,7 +101,14 @@ export default function WeatherPanel({
             </div>
             <Icon icon={getWeatherIcon(w.weather[0].icon, w.rain?.["1h"] ?? w.rain?.["3h"] ?? 0)} style={{ fontSize: "3rem" }} />
             <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{w.name}</div>
-            <div style={{ fontSize: "1rem", fontWeight: 600 }}>{w.main.temp.toFixed(1)}°C</div>
+            <div style={{ fontSize: "1rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center"}}>
+              {w.main.temp.toFixed(1)}°C
+              {w.main.temp > 30
+                ? <Icon icon="meteocons:thermometer-warmer" style={{ fontSize: "2rem" }} />
+                : w.main.temp < 0
+                  ? <Icon icon="meteocons:thermometer-colder" style={{ fontSize: "2rem" }} />
+                  : null}
+            </div>
             <div style={{ fontSize: "0.78rem", opacity: 0.8, marginTop: "0.2rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem" }}>
               💨 {(w.wind.speed * 3.6).toFixed(1)} km/h
               {w.wind.speed * 3.6 > 20 && (
