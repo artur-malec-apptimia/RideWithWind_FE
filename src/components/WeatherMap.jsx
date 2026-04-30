@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
 import { MapContainer, TileLayer, Polyline, Tooltip, CircleMarker, Marker, Pane, ZoomControl, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -184,18 +184,22 @@ export default function WeatherMap({ weatherPoints, gpxPoints, gpxMidPoint, colo
                     </div>
                   );
                   return (
-                    <Polyline key={i} positions={seg.positions} pathOptions={{ color: seg.color, weight: 4 }}
-                      eventHandlers={{
-                        mousemove: onHoverPoint ? (e) => onHoverPoint(nearestGpxPoint(gpxPoints, e.latlng)) : undefined,
-                        mouseout: onHoverPoint ? () => onHoverPoint(null) : undefined,
-                      }}
-                    >
-                      {tooltipContent && (
-                        <Tooltip sticky direction="top" offset={[0, -4]} opacity={1} className="wind-tooltip">
-                          {tooltipContent}
-                        </Tooltip>
-                      )}
-                    </Polyline>
+                    <React.Fragment key={i}>
+                      <Polyline positions={seg.positions} pathOptions={{ color: seg.color, weight: 4, interactive: false }} />
+                      <Polyline positions={seg.positions} pathOptions={{ color: "transparent", weight: 20 }}
+                        eventHandlers={{
+                          mouseover: (e) => { if (!tooltipContent) e.target.closeTooltip(); },
+                          mousemove: onHoverPoint ? (e) => onHoverPoint(nearestGpxPoint(gpxPoints, e.latlng)) : undefined,
+                          mouseout: onHoverPoint ? () => onHoverPoint(null) : undefined,
+                        }}
+                      >
+                        {tooltipContent && (
+                          <Tooltip sticky direction="top" offset={[0, -4]} opacity={1} className="wind-tooltip">
+                            {tooltipContent}
+                          </Tooltip>
+                        )}
+                      </Polyline>
+                    </React.Fragment>
                   );
                 })}
                 {/* Gradient transition zones rendered on top (non-interactive so base segments get mouse events) */}
