@@ -7,6 +7,7 @@ import ElevationChart from "./components/ElevationChart";
 import WindCompass from "./components/WindCompass";
 import WeatherPanel from "./components/WeatherPanel";
 import StravaRoutes from "./components/StravaRoutes";
+import BottomSheet from "./components/BottomSheet";
 import { parseGPX, fetchRouteWeather, fetchWindAnalysis, fetchColoredSegments, fetchStravaStatus, disconnectStrava, fetchTimezone } from "./api";
 import { todayStr, nowTimeStr, buildTempColoredSegments, localTimeToUnix, getSunTimes } from "./utils/weather";
 import { panelStyle } from "./styles";
@@ -34,6 +35,13 @@ function App() {
   const [sunTimes, setSunTimes] = useState(null);
   const [fetchedStartDate, setFetchedStartDate] = useState(null);
   const [fetchedStartTime, setFetchedStartTime] = useState(null);
+
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
 
   useEffect(() => {
     fetchStravaStatus().then(({ connected }) => setStravaConnected(connected));
@@ -194,6 +202,8 @@ function App() {
       ]
     : [];
 
+  const hasElevation = gpxPoints ? gpxPoints.some(p => p.ele != null) : false;
+
   const tempColoredSegments =
     weatherPoints && gpxPoints ? buildTempColoredSegments(gpxPoints, weatherPoints) : null;
   const activeSegments = vizMode === "temp" ? tempColoredSegments : coloredSegments;
@@ -221,35 +231,41 @@ function App() {
       <div
         style={{
           ...panelStyle,
-          ...(gpxPoints
-            ? { top: "1rem", left: "50%", transform: "translateX(-50%)" }
-            : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }),
+          ...(isMobile
+            ? { top: "1rem", left: "1rem", padding: "0.5rem 0.75rem" }
+            : gpxPoints
+              ? { top: "1rem", left: "50%", transform: "translateX(-50%)" }
+              : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }),
           textAlign: "center",
-          minWidth: "260px",
+          minWidth: isMobile ? "auto" : "260px",
         }}
       >
-        <h1 style={{ margin: "0 0 0.75rem", fontSize: "1.5rem" }}>RideWithWind</h1>
+        <h1 style={{ margin: "0 0 0.5rem", fontSize: isMobile ? "1.1rem" : "1.5rem" }}>RideWithWind</h1>
         {/* Date & time pickers */}
-        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", marginBottom: "0.75rem", alignItems: "stretch" }}>
-          <div style={{ display: "flex", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "8px", overflow: "hidden" }}>
+        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", marginBottom: "0.75rem", alignItems: "stretch", flexWrap: isMobile ? "wrap" : "nowrap" }}>
+          <div style={{ display: "flex", flexWrap: isMobile ? "wrap" : "nowrap", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "8px", overflow: "hidden", width: isMobile ? "100%" : "auto" }}>
             {[0, 1, 2, 3].map((offset) => {
               const d = new Date();
               d.setDate(d.getDate() + offset);
               const dayStr = d.toISOString().split("T")[0];
               const isSelected = startDate === dayStr;
-              const label = offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : d.toLocaleDateString([], { weekday: "short", day: "numeric" });
+              const label = isMobile
+                ? (offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : d.toLocaleDateString([], { weekday: "short" }))
+                : (offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : d.toLocaleDateString([], { weekday: "short", day: "numeric" }));
               return (
                 <button
                   key={offset}
                   onClick={() => handleDateTimeChange(dayStr, startTime)}
                   style={{
-                    padding: "0",
-                    minWidth: "5.1rem",
+                    padding: isMobile ? "0.3rem 0" : "0",
+                    flex: isMobile ? "1 1 50%" : "none",
+                    minWidth: isMobile ? "auto" : "5.1rem",
                     border: "none",
-                    borderRight: offset < 3 ? "1px solid rgba(255,255,255,0.18)" : "none",
+                    borderRight: isMobile ? (offset % 2 === 0 ? "1px solid rgba(255,255,255,0.18)" : "none") : (offset < 3 ? "1px solid rgba(255,255,255,0.18)" : "none"),
+                    borderBottom: isMobile && offset < 2 ? "1px solid rgba(255,255,255,0.18)" : "none",
                     background: isSelected ? "rgba(255,255,255,0.18)" : "transparent",
                     color: isSelected ? "#fff" : "rgba(255,255,255,0.5)",
-                    fontSize: "0.8rem",
+                    fontSize: isMobile ? "0.7rem" : "0.8rem",
                     cursor: "pointer",
                     fontWeight: isSelected ? 600 : 400,
                     whiteSpace: "nowrap",
@@ -265,13 +281,13 @@ function App() {
             type="time"
             value={startTime}
             onChange={(e) => handleDateTimeChange(startDate, e.target.value)}
-            style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "8px", color: "#fff", fontSize: "0.8rem", padding: "0.3rem 0.5rem", outline: "none", colorScheme: "dark" }}
+            style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: "8px", color: "#fff", fontSize: "0.8rem", padding: "0.3rem 0.5rem", outline: "none", colorScheme: "dark", flex: isMobile ? 1 : "none" }}
           />
         </div>
         <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
           <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", padding: "0 1rem", height: "34px", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "6px", fontSize: "0.85rem" }}>
             <Icon icon="mingcute:file-upload-line" />
-            {gpxFileName || "Upload .gpx file"}
+            {gpxFileName || (isMobile ? "Upload .gpx" : "Upload .gpx file")}
             <input type="file" accept=".gpx" onChange={handleGpxUpload} style={{ display: "none" }} />
           </label>
           {import.meta.env.DEV && (stravaConnected ? (
@@ -326,66 +342,72 @@ function App() {
         {error && <p style={{ margin: "0.5rem 0 0", fontSize: "0.8rem", color: "#f87171" }}>{error}</p>}
       </div>
 
-      {/* Left column: weather + wind analysis */}
-      {weatherPoints && (
-        <div style={{ position: "fixed", left: "1rem", top: "1rem", bottom: "1rem", zIndex: 10, display: "flex", flexDirection: "column", justifyContent: "flex-start", pointerEvents: "none", gap: "1rem" }}>
-
-          <WeatherPanel
-            loading={loading}
-            routeAnalysis={routeAnalysis}
-            avgTemp={avgTemp}
-            avgWindSpeed={avgWindSpeed}
-            avgWindGust={avgWindGust}
-            checkpoints={checkpoints}
-            startDate={fetchedStartDate ?? startDate}
-            startTime={fetchedStartTime ?? startTime}
-            nowUnixDisplay={nowUnixDisplay}
-            speedInput={speedInput}
-            setSpeedInput={setSpeedInput}
-            avgSpeed={avgSpeed}
-            setAvgSpeed={setAvgSpeed}
-            gpxPoints={gpxPoints}
-            fetchWeatherForRoute={handleFetchWeather}
-            getStartUnix={getStartUnix}
-            timezone={routeTimezone}
-            sunTimes={sunTimes}
-          />
-
-          {/* Wind analysis panel */}
-          {routeAnalysis && (
-            <div style={{ ...panelStyle, position: "relative", pointerEvents: "auto", textAlign: "center" }}>
-              {loading && (
-                <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
-                  <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
+      {/* Weather panels shared content */}
+      {weatherPoints && (() => {
+        const weatherPanelProps = {
+          loading, routeAnalysis, avgTemp, avgWindSpeed, avgWindGust, checkpoints,
+          startDate: fetchedStartDate ?? startDate, startTime: fetchedStartTime ?? startTime,
+          nowUnixDisplay, speedInput, setSpeedInput, avgSpeed, setAvgSpeed,
+          gpxPoints, fetchWeatherForRoute: handleFetchWeather, getStartUnix,
+          timezone: routeTimezone, sunTimes,
+        };
+        const windAnalysis = routeAnalysis && (
+          <div style={{ ...(!isMobile && panelStyle), ...(isMobile && { borderTop: "1px solid rgba(255,255,255,0.1)", padding: "1rem 1.2rem" }), position: "relative", textAlign: "center" }}>
+            {loading && (
+              <div style={{ position: "absolute", inset: 0, borderRadius: isMobile ? 0 : "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+                <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "1.2rem", justifyContent: "center", marginBottom: "0.75rem" }}>
+              {[
+                { label: "Headwind", value: routeAnalysis.headwind, km: routeAnalysis.headwindKm, color: "#e05555" },
+                { label: "Crosswind", value: routeAnalysis.crosswind, km: routeAnalysis.crosswindKm, color: "#e0a020" },
+                { label: "Tailwind", value: routeAnalysis.tailwind, km: routeAnalysis.tailwindKm, color: "#3daa5a" },
+              ].map(({ label, value, km, color }) => (
+                <div key={label}>
+                  <strong style={{ color, fontSize: "1.1rem" }}>{value.toFixed(1)}%</strong>
+                  <div style={{ fontSize: "0.8rem" }}>{label}</div>
+                  <div style={{ fontSize: "0.75rem", opacity: 0.7 }}>{km.toFixed(2)} km</div>
                 </div>
-              )}
-              <div style={{ display: "flex", gap: "1.2rem", justifyContent: "center", marginBottom: "0.75rem" }}>
-                {[
-                  { label: "Headwind", value: routeAnalysis.headwind, km: routeAnalysis.headwindKm, color: "#e05555" },
-                  { label: "Crosswind", value: routeAnalysis.crosswind, km: routeAnalysis.crosswindKm, color: "#e0a020" },
-                  { label: "Tailwind", value: routeAnalysis.tailwind, km: routeAnalysis.tailwindKm, color: "#3daa5a" },
-                ].map(({ label, value, km, color }) => (
-                  <div key={label}>
-                    <strong style={{ color, fontSize: "1.1rem" }}>{value.toFixed(1)}%</strong>
-                    <div style={{ fontSize: "0.8rem" }}>{label}</div>
-                    <div style={{ fontSize: "0.75rem", opacity: 0.7 }}>{km.toFixed(2)} km</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ height: "10px", borderRadius: "5px", overflow: "hidden", display: "flex" }}>
-                <div style={{ flex: routeAnalysis.headwind, background: "#e05555" }} />
-                <div style={{ flex: routeAnalysis.crosswind, background: "#e0a020" }} />
-                <div style={{ flex: routeAnalysis.tailwind, background: "#3daa5a" }} />
-              </div>
+              ))}
             </div>
-          )}
+            <div style={{ height: "10px", borderRadius: "5px", overflow: "hidden", display: "flex" }}>
+              <div style={{ flex: routeAnalysis.headwind, background: "#e05555" }} />
+              <div style={{ flex: routeAnalysis.crosswind, background: "#e0a020" }} />
+              <div style={{ flex: routeAnalysis.tailwind, background: "#3daa5a" }} />
+            </div>
+          </div>
+        );
 
-        </div>
-      )}
+        if (isMobile) {
+          const peekContent = (
+            <>
+              <span style={{ fontSize: "0.95rem", fontWeight: 600 }}>{avgTemp.toFixed(1)}°C</span>
+              <span style={{ fontSize: "0.85rem", opacity: 0.7 }}>💨 {(avgWindSpeed * 3.6).toFixed(1)} km/h</span>
+              {routeAnalysis && <span style={{ fontSize: "0.8rem", opacity: 0.55 }}>{routeAnalysis.tailwind.toFixed(0)}% tailwind</span>}
+            </>
+          );
+          return (
+            <BottomSheet peekContent={peekContent} bottomOffset={hasElevation ? 150 : 0}>
+              <div style={{ padding: "0.75rem 1.2rem 0" }}>
+                <WeatherPanel {...weatherPanelProps} />
+              </div>
+              {windAnalysis}
+            </BottomSheet>
+          );
+        }
+
+        return (
+          <div style={{ position: "fixed", left: "1rem", top: "1rem", bottom: "1rem", zIndex: 10, display: "flex", flexDirection: "column", justifyContent: "flex-start", pointerEvents: "none", gap: "1rem" }}>
+            <WeatherPanel {...weatherPanelProps} />
+            {windAnalysis}
+          </div>
+        );
+      })()}
 
       {/* Bottom-centre: elevation panel */}
       {gpxPoints && gpxPoints.some(p => p.ele != null) && (
-        <div style={{ ...panelStyle, position: "fixed", bottom: "1rem", left: "50%", transform: "translateX(-50%)", zIndex: 10, width: "min(820px, calc(100vw - 2rem))", pointerEvents: "auto" }}>
+        <div style={{ ...panelStyle, position: "fixed", bottom: isMobile ? 0 : "1rem", left: isMobile ? 0 : "50%", right: isMobile ? 0 : "auto", transform: isMobile ? "none" : "translateX(-50%)", borderRadius: isMobile ? "12px 12px 0 0" : "12px", zIndex: 10, width: isMobile ? "auto" : "min(820px, calc(100vw - 2rem))", pointerEvents: "auto" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
             <div style={{ fontSize: "0.72rem", opacity: 0.5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Elevation</div>
             {weatherPoints && (

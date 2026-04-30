@@ -3,9 +3,12 @@ import cyclistAbove from "../assets/CyclistAbove.png";
 import { panelStyle } from "../styles";
 import { windAngleBgColor, getWindDirection } from "../utils/weather";
 
-export default function WindCompass({ avgWindDeg, avgWindSpeed, relativeWindAngle, relativeWindLabel, hoveredWindSpeed, loading }) {
+export default function WindCompass({ avgWindDeg, avgWindSpeed, relativeWindAngle, relativeWindLabel, hoveredWindSpeed, loading, embedded }) {
   return (
-    <div style={{ ...panelStyle, top: "1rem", right: "1rem", textAlign: "center", minWidth: "180px" }}>
+    <div style={embedded
+      ? { textAlign: "center", padding: "1rem 1.2rem", borderTop: "1px solid rgba(255,255,255,0.1)" }
+      : { ...panelStyle, top: "1rem", right: "1rem", textAlign: "center", minWidth: "180px" }
+    }>
       {loading && (
         <div style={{ position: "absolute", inset: 0, borderRadius: "12px", background: "rgba(15,15,25,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
           <span className="spinner" style={{ width: "28px", height: "28px", borderWidth: "3px" }} />
